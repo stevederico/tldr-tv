@@ -2,7 +2,7 @@
   "name": "book-player",
   "private": false,
   "version": "0.76.0",
-  "skateboardVersion": "3.14.0",
+  "skateboardVersion": "4.9.1",
   "type": "module",
   "workspaces": [
     "backend"
@@ -21,7 +21,7 @@
     "verify:ui": "node scripts/verify-ui-version.mjs"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "4.3.0",
+    "@stevederico/skateboard-ui": "4.11.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "react-router": "7.15.0"
