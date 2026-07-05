@@ -9,7 +9,7 @@
     "scripts": {
         "start": "node server.ts",
         "dev": "node --watch server.ts",
-        "test": "node --test server.test.ts",
+        "test": "node --experimental-test-module-mocks --experimental-test-coverage --test-concurrency=1 --test server.test.ts server.lifecycle.test.js server.prod-import.test.js adapters/*.test.js lib/*.test.js tts/*.test.js",
         "test:watch": "node --test --watch server.test.ts"
     },
     "dependencies": {
