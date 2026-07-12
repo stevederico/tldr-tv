@@ -44,7 +44,7 @@ let nextId = 1;
  * @param options - Variant + duration options.
  * @returns toast id
  */
-export const toast = ((message: string, options: ToastOptions = {}): number => {
+function toastImpl(message: string, options: ToastOptions = {}): number {
   const id = nextId++;
   const item: ToastItem = {
     id,
@@ -57,10 +57,14 @@ export const toast = ((message: string, options: ToastOptions = {}): number => {
     setTimeout(() => listeners.forEach(fn => fn({ type: 'remove', id })), item.duration);
   }
   return id;
-}) as ToastFn;
+}
 
-toast.error = (message, options = {}) => toast(message, { ...options, variant: 'error' });
-toast.success = (message, options = {}) => toast(message, { ...options, variant: 'success' });
+export const toast: ToastFn = Object.assign(toastImpl, {
+  error: (message: string, options: ToastOptions = {}) =>
+    toastImpl(message, { ...options, variant: 'error' }),
+  success: (message: string, options: ToastOptions = {}) =>
+    toastImpl(message, { ...options, variant: 'success' }),
+});
 
 /**
  * Dismiss a toast immediately by id (returned from toast()).

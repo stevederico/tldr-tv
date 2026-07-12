@@ -129,7 +129,7 @@ export default function LibraryView() {
     } catch (err) {
       console.error('Delete guide failed', err);
       setGuides(prev);
-      toast.error((err as Error).message || 'Could not delete that guide.');
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Could not delete that guide.');
     } finally {
       setDeletingSlug(null);
     }
@@ -316,7 +316,7 @@ export default function LibraryView() {
       resetCreateForm();
     } catch (err) {
       console.error('Create guide failed', err);
-      toast.error((err as Error).message || 'Something went wrong');
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Something went wrong');
       setSubmitLabel('Create guide');
     } finally {
       setSubmitting(false);
@@ -485,9 +485,9 @@ export default function LibraryView() {
               {/* Pure URL or Text flow — nothing else */}
               <div className="flex bg-secondary rounded-full p-[3px] mb-4 border border-border">
                 {([
-                  { mode: 'url',  label: 'From URL' },
-                  { mode: 'text', label: 'Paste Text' },
-                ] as { mode: SourceMode; label: string }[]).map(({ mode, label }) => (
+                  { mode: 'url' as const,  label: 'From URL' },
+                  { mode: 'text' as const, label: 'Paste Text' },
+                ]).map(({ mode, label }: { mode: SourceMode; label: string }) => (
                   <button
                     key={mode}
                     type="button"

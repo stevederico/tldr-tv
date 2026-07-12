@@ -155,7 +155,10 @@ export default function PlayerView() {
     pointerInsideRef.current = false;
     // Drop focus inside the hero so :focus-within fallbacks don't keep controls visible
     if (heroRef.current && document.activeElement && heroRef.current.contains(document.activeElement)) {
-      try { (document.activeElement as HTMLElement).blur(); } catch {}
+      try {
+        const el = document.activeElement;
+        if (el instanceof HTMLElement) el.blur();
+      } catch {}
     }
     // Sync DOM update for instant hide as soon as cursor leaves the player area
     if (heroRef.current) delete heroRef.current.dataset.controls;
@@ -196,7 +199,8 @@ export default function PlayerView() {
     // Sheet handles outside-click + Esc on mobile via onOpenChange; don't double-fire.
     if (!menuOpen || isMobile) return;
     function onDoc(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      const target = e.target;
+      if (menuRef.current && target instanceof Node && !menuRef.current.contains(target)) setMenuOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -209,7 +213,8 @@ export default function PlayerView() {
   useEffect(() => {
     if (!chaptersMenuOpen || isMobile) return;
     function onDoc(e: MouseEvent) {
-      if (chaptersMenuRef.current && !chaptersMenuRef.current.contains(e.target as Node)) setChaptersMenuOpen(false);
+      const target = e.target;
+      if (chaptersMenuRef.current && target instanceof Node && !chaptersMenuRef.current.contains(target)) setChaptersMenuOpen(false);
     }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
@@ -225,7 +230,8 @@ export default function PlayerView() {
   useEffect(() => {
     if (!noteSelection) return;
     function onDoc(e: MouseEvent) {
-      if (selectionPopupRef.current && !selectionPopupRef.current.contains(e.target as Node)) {
+      const target = e.target;
+      if (selectionPopupRef.current && target instanceof Node && !selectionPopupRef.current.contains(target)) {
         setNoteSelection(null);
         setNoteCustomText('');
       }
@@ -390,7 +396,8 @@ export default function PlayerView() {
     function onKey(e: KeyboardEvent) {
       const a = audioRef.current;
       if (!a) return;
-      const target = e.target as HTMLElement;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
       if (target.matches && target.matches('input,select,textarea')) return;
       if (e.key === ' ' || e.key === 'k') {
         e.preventDefault();
@@ -435,7 +442,8 @@ export default function PlayerView() {
   function handleHeroClick(e: ReactMouseEvent<HTMLDivElement>) {
     // Don't toggle play when the click came from inside the controls overlay
     // (its own buttons handle their own actions; otherwise we'd double-toggle).
-    if ((e.target as HTMLElement).closest('[data-overlay]')) return;
+    const target = e.target;
+    if (target instanceof Element && target.closest('[data-overlay]')) return;
     togglePlay();
   }
 
@@ -686,8 +694,11 @@ export default function PlayerView() {
   // present, rotate between them every IMAGE_SWAP_SECONDS so the visual changes
   // through the chapter; otherwise just show whichever one exists.
   const IMAGE_SWAP_SECONDS = 10;
-  const chapterImages = [ch.image && ch.image.generated, ch.realImage].filter(Boolean) as string[];
-  const chapterStart = Number.isFinite(ch.time) ? (ch.time as number) : 0;
+  const chapterImages: string[] = [];
+  const generated = ch.image?.generated;
+  if (typeof generated === 'string' && generated) chapterImages.push(generated);
+  if (typeof ch.realImage === 'string' && ch.realImage) chapterImages.push(ch.realImage);
+  const chapterStart = typeof ch.time === 'number' && Number.isFinite(ch.time) ? ch.time : 0;
   const secondsInChapter = Math.max(0, current - chapterStart);
   const heroIdx = chapterImages.length > 0
     ? Math.floor(secondsInChapter / IMAGE_SWAP_SECONDS) % chapterImages.length

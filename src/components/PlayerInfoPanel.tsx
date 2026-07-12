@@ -74,11 +74,11 @@ export default function PlayerInfoPanel({
       <div className="font-['Bricolage_Grotesque',system-ui,sans-serif] text-[1.1rem] font-bold tracking-[-0.02em] text-foreground py-2 pb-3.5 flex items-center justify-between gap-3 border-b border-border mb-1.5">
         <div className="inline-flex gap-1 bg-card rounded-full p-[3px]" role="tablist" aria-label="Panel">
           {([
-            { key: 'summary',    label: 'Summary',    show: true },
-            { key: 'chapters',   label: 'Chapters',   show: true },
-            { key: 'transcript', label: 'Transcript', show: !!guide?.transcript },
-            { key: 'notes',      label: 'Notes',      show: true },
-          ] as { key: PanelTab; label: string; show: boolean }[]).filter(t => t.show).map(t => (
+            { key: 'summary' as const,    label: 'Summary',    show: true },
+            { key: 'chapters' as const,   label: 'Chapters',   show: true },
+            { key: 'transcript' as const, label: 'Transcript', show: !!guide?.transcript },
+            { key: 'notes' as const,      label: 'Notes',      show: true },
+          ]).filter((t: { key: PanelTab; label: string; show: boolean }) => t.show).map(t => (
             <button
               key={t.key}
               role="tab"

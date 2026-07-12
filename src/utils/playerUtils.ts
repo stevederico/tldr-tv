@@ -162,11 +162,17 @@ export function alignTimings(
     }
   }
   let last = 0;
+  const filled: number[] = [];
   for (let i = 0; i < times.length; i++) {
-    if (times[i] == null) times[i] = last;
-    else last = times[i] as number;
+    const t = times[i];
+    if (t == null) {
+      filled.push(last);
+    } else {
+      last = t;
+      filled.push(t);
+    }
   }
-  return times as number[];
+  return filled;
 }
 
 /**
