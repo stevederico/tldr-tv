@@ -429,6 +429,20 @@ In dev, Vite proxies `/api`, `/audio`, `/images` to the backend on `:8000`. In p
 
 **Adding a guide programmatically:** `backend/scripts/migrate-guides.js` reads JSON manifests + transcript files and upserts via `db.upsertGuide`. See `docs/SCHEMA.md` for the `Guides` table shape and `docs/API.md` for endpoint details.
 
+### TTS Audio Pipeline — invariants (DO NOT REGRESS)
+
+TTS is **local Kokoro** (`backend/tts/kokoro.js` → `synthesize()`), ONNX Kokoro-82M — **not** Grok. Grok only does the text analysis/summary. The pipeline (`backend/tts/tts-pipeline.js` `synthesizeGuide`) chunks the transcript (~380 chars ≈ 25s of audio per chunk), synthesizes each chunk, and concatenates the WAVs, then `wavToMp3` encodes the canonical `/audio/<slug>.mp3`.
+
+Two bugs here caused a long, painful "audio skips" hunt. Both are fixed; **do not reintroduce them:**
+
+1. **Mid-word cut ("skips when it says 2026")** — root cause: the pipeline used to splice **extra silence at each punctuation mark** using Kokoro's **per-word timings**. Those timings **drift for tokens Kokoro expands when speaking** — the year `2026` is one transcript word but is spoken "twenty twenty-six", the time `1:31pm` expands, etc. The spliced silence landed **inside** the expanded word and chopped it → audible as a skip *inside* the word. **Fix:** never splice silence from per-word timings. **Kokoro already emits natural, correctly-placed pauses** for `. ! ? , ; :` via its punctuation tokens — trust them. `synthesizeGuide` now pushes each segment's audio + timings **verbatim** (only inter-segment seam / cross-chunk breath silence remains, at real boundaries). If asked to "add pauses" / "make commas breathe", tune Kokoro input or `PAUSE_MS`/`SENTENCE_PAUSE_SEC` at **segment/chunk seams only** — **never** re-add timing-based intra-word/intra-segment slicing (`findPunctuationPauses` + `sliceWavSamples` were deleted for this reason).
+
+2. **Missing MP3 seek header ("skips to the wrong spot on rewind")** — root cause: `wavToMp3` piped MP3 to `stdout` (`pipe:1`). ffmpeg can only write a complete **Xing/Info seek header** to a **seekable** output (it rewinds to frame 1 after encoding to fill in the frame count + seek TOC). A pipe can't seek → header omitted → the browser estimates byte↔time from average bitrate → seeks land wrong, **deterministically per file**. **Fix:** the canonical encode (`xing: true`) writes to a **temp file** then reads it back; only the streaming per-chunk path (`xing: false`, no header wanted) keeps the fast pipe. Verify any new/edited encode with: `python3 -c "d=open('f.mp3','rb').read(3000);print(d.find(b'Xing'),d.find(b'Info'))"` — one of them must be `>= 0`.
+
+**Re-render a guide** (picks up pipeline fixes; requires a backend restart first if code changed): `POST /api/guides/:slug/tts`, then poll `GET /api/guides/:slug` for `jobs.tts.status === 'done'`. **Existing audio on disk is NOT auto-fixed** by a code change — it must be re-rendered. To add a seek header to old files **without** re-rendering (lossless), remux: `ffmpeg -y -i in.mp3 -c copy -write_xing 1 out.mp3` (duration unchanged). The mid-word-cut fix, however, requires a full **re-render** (the silence is baked into the WAV concat).
+
+**Debugging "it skips" — verify the FILE before touching playback:** decode to PCM and (a) look for silence runs *inside* a spoken word (`ffmpeg -i f.mp3 -f s16le -ar 24000 -ac 1 -`), (b) transcribe with local whisper (`whisper-cli -m ~/.local/opt/whisper.cpp/models/ggml-large-v3-turbo.bin -f f.wav -ml 1`) to confirm words aren't dropped, (c) check the Xing/Info header. "Skips at the same spot every replay" = baked into the file (pipeline), not playback.
+
 ### Frontend Stack
 - React, Vite, react-router-dom (latest versions)
 - TypeScript (`strict`, no-build-step typecheck), ES modules only

@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.95.0
+
+  Document TTS invariants
+  Re-render old audio
+
 0.94.0
 
   Drop punctuation splice
