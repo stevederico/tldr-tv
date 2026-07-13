@@ -522,17 +522,25 @@ function applyGuide(guide) {
   const chunksTotal = Number(jobs.tts?.chunksTotal) || 0;
   const leadReady = chunksDone >= 1 || (chunksTotal > 0 && chunksDone >= chunksTotal);
 
-  if (streamStarted && audioEl instanceof HTMLAudioElement) {
-    // Already on the progressive stream — never swap src (that restarts at 0).
-    // Hide build once playback has actually started; otherwise keep "Buffering…".
-    if (autoplayAttempted && buildEl) buildEl.classList.add('is-hidden');
+  // Already PLAYING the live stream — keep it latched (swapping src restarts at
+  // 0). The buffer gate only applies until playback has actually begun.
+  if (streamStarted && playbackBegan && audioEl instanceof HTMLAudioElement) {
+    if (buildEl) buildEl.classList.add('is-hidden');
     pumpStreamPlayback();
     if (pollId && jobs.pipeline?.status === 'done') {
       clearInterval(pollId);
       pollId = null;
     }
-  } else if (playable && audioEl instanceof HTMLAudioElement) {
+    return;
+  }
+
+  if (playable && audioEl instanceof HTMLAudioElement) {
     // Canonical file is ready (Range-seekable) — normal full-fidelity playback.
+    // Also the recovery path when the live stream was attached but never
+    // actually started (its progressive buffer stalled, leaving the player
+    // stuck on "Ready"): nothing has played, so switching to the seekable file
+    // is safe and unblocks the start.
+    streamStarted = false;
     const src = assetUrl(audioPath);
     if (audioEl.dataset.src !== src) {
       audioEl.dataset.src = src;
@@ -552,7 +560,18 @@ function applyGuide(guide) {
       clearInterval(pollId);
       pollId = null;
     }
-  } else if (ttsRunning && leadReady && audioEl instanceof HTMLAudioElement) {
+    return;
+  }
+
+  if (streamStarted && audioEl instanceof HTMLAudioElement) {
+    // Attached to the live stream, still rendering, not yet playing — wait for
+    // buffer via pump. Keep the src latched (don't re-assign, that rebuffers).
+    if (autoplayAttempted && buildEl) buildEl.classList.add('is-hidden');
+    pumpStreamPlayback();
+    return;
+  }
+
+  if (ttsRunning && leadReady && audioEl instanceof HTMLAudioElement) {
     // Point <audio> at the progressive stream, but do NOT play yet — wait for
     // bufferedAhead >= MIN_START_BUFFER_SEC via progress/timeupdate. Playing
     // into a near-empty progressive download is what caused stalls in <15s.
@@ -569,9 +588,10 @@ function applyGuide(guide) {
     if (buildEl) buildEl.classList.remove('is-hidden');
     if (buildStep) buildStep.textContent = 'Buffering audio…';
     pumpStreamPlayback();
-  } else if (buildEl) {
-    buildEl.classList.remove('is-hidden');
+    return;
   }
+
+  if (buildEl) buildEl.classList.remove('is-hidden');
 }
 
 function tickTime() {

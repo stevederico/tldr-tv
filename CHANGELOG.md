@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.91.0
+
+  Fix stuck start
+  Recover to file
+
 0.90.0
 
   Faster stream start
