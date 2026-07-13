@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.79.0
+
+  Add competitor research
+
 0.78.0
 
   Prioritize open todos
