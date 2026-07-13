@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.85.0
+
+  PiP captions button
+  Fix stream skipping
+
 0.84.0
 
   Rename to Watch It

@@ -36,6 +36,7 @@ const settingsBtn = document.getElementById('settingsBtn');
 const settingsMenu = document.getElementById('settingsMenu');
 const captionEl = document.getElementById('caption');
 const ccToggle = document.getElementById('ccToggle');
+const ccBtn = document.getElementById('ccBtn');
 const hlToggle = document.getElementById('hlToggle');
 const flashEl = document.getElementById('flash');
 const flashPlay = document.getElementById('flashPlay');
@@ -66,6 +67,11 @@ let rate = 1;
 // start before the full render finishes). Prevents re-setting src every poll
 // and prevents a mid-playback swap to the canonical file.
 let streamStarted = false;
+// True once real playback has advanced past 0s. A transient stream `error` or
+// `stalled` after this point must NOT reset `streamStarted` — re-entering the
+// src-setting branches would re-assign audio.src and restart from 0 (audible as
+// the audio "skipping" back to the start mid-listen).
+let playbackBegan = false;
 
 // --- Captions + word highlighting (ported from the web PlayerView) ---
 /** Lead the highlight so the word lights as it is heard, not after. */
@@ -338,6 +344,20 @@ function stopCaptionLoop() {
 }
 
 /**
+ * Reflect the current captions state on both toggles — the settings-menu
+ * checkbox and the standalone CC button in the control bar.
+ */
+function syncCaptionsUi() {
+  ccToggle?.setAttribute('aria-checked', captionsOn ? 'true' : 'false');
+  ccBtn?.setAttribute('aria-pressed', captionsOn ? 'true' : 'false');
+  ccBtn?.setAttribute('aria-label', captionsOn ? 'Turn captions off' : 'Turn captions on');
+  if (ccBtn instanceof HTMLElement) {
+    if (captionsOn) ccBtn.setAttribute('data-active', '');
+    else ccBtn.removeAttribute('data-active');
+  }
+}
+
+/**
  * Toggle a settings checkbox item and persist the preference.
  *
  * @param {'cc' | 'hl'} which
@@ -346,7 +366,7 @@ function toggleSetting(which) {
   if (which === 'cc') {
     captionsOn = !captionsOn;
     safeSet('pip.cc', captionsOn ? '1' : '0');
-    ccToggle?.setAttribute('aria-checked', captionsOn ? 'true' : 'false');
+    syncCaptionsUi();
   } else {
     highlightOn = !highlightOn;
     safeSet('pip.hl', highlightOn ? '1' : '0');
@@ -416,7 +436,15 @@ function applyGuide(guide) {
   if (Number.isFinite(duration) && duration > 0) knownDuration = duration;
   const playable = audioPath.length > 0 && Number.isFinite(duration) && duration > 0;
   const ttsRunning = jobs.tts?.status === 'running';
-  const firstChunkReady = (Number(jobs.tts?.chunksDone) || 0) >= 1;
+  // Wait for a small lead of rendered chunks before starting the progressive
+  // stream, so the playhead has buffer headroom and doesn't catch the still-
+  // generating frontier (which under-runs as an audible pause/rebuffer). Costs
+  // ~one extra chunk of startup latency for smoother playback.
+  // yagni: fixed 2-chunk lead; make it a seconds-of-audio margin if render
+  // speed varies enough that 2 chunks isn't a reliable buffer.
+  const chunksDone = Number(jobs.tts?.chunksDone) || 0;
+  const chunksTotal = Number(jobs.tts?.chunksTotal) || 0;
+  const leadReady = chunksDone >= 2 || (chunksTotal > 0 && chunksDone >= chunksTotal);
 
   if (streamStarted && audioEl instanceof HTMLAudioElement) {
     // Already playing the progressive stream — it delivers the whole guide, so
@@ -447,7 +475,7 @@ function applyGuide(guide) {
       clearInterval(pollId);
       pollId = null;
     }
-  } else if (ttsRunning && firstChunkReady && audioEl instanceof HTMLAudioElement) {
+  } else if (ttsRunning && leadReady && audioEl instanceof HTMLAudioElement) {
     // Audio isn't fully rendered yet, but the first chunk exists — start
     // playing the progressive stream now so playback begins in ~1-2s.
     streamStarted = true;
@@ -469,6 +497,7 @@ function applyGuide(guide) {
 function tickTime() {
   if (!(audioEl instanceof HTMLAudioElement)) return;
   const cur = audioEl.currentTime || 0;
+  if (cur > 0) playbackBegan = true;
   // The live stream reports duration=Infinity; fall back to the guide's known
   // duration so the total/progress are real, and show elapsed-only when neither
   // is known yet (early streaming) rather than "Infinity:NaN".
@@ -596,7 +625,10 @@ async function init() {
   // lands), reset so the next poll re-attempts — either the stream again or the
   // canonical file once it's ready.
   audioEl?.addEventListener('error', () => {
-    if (streamStarted && !(audioEl instanceof HTMLAudioElement && audioEl.duration > 0)) {
+    // Only recover (re-attempt src on the next poll) if playback never began —
+    // i.e. a genuine early race before the first stream bytes landed. Once audio
+    // has advanced, keep the stream latched so we never restart from 0.
+    if (streamStarted && !playbackBegan) {
       streamStarted = false;
       autoplayAttempted = false;
     }
@@ -650,7 +682,7 @@ async function init() {
   });
 
   // Caption + word-highlight toggles (persisted). Keep the menu open on toggle.
-  ccToggle?.setAttribute('aria-checked', captionsOn ? 'true' : 'false');
+  syncCaptionsUi();
   hlToggle?.setAttribute('aria-checked', highlightOn ? 'true' : 'false');
   ccToggle?.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -659,6 +691,12 @@ async function init() {
   hlToggle?.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleSetting('hl');
+  });
+
+  // Standalone CC button in the control bar (mirrors the settings-menu toggle).
+  ccBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSetting('cc');
   });
 
   // External-link icon → full web player in a new tab
