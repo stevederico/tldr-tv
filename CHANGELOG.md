@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.106.0
+
+  Save swiss mockup
+
 0.105.0
 
   Swiss grid restyle

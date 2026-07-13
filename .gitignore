@@ -65,4 +65,5 @@ backend/public/images/*
 !backend/public/images/how-to-earn-a-billion-dollars
 
 # Design exploration mockups (throwaway)
-mockups/
+mockups/*
+!mockups/4-swiss.html
