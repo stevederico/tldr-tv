@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.96.0
+
+  Re-render tracked audio
+
 0.95.0
 
   Document TTS invariants
