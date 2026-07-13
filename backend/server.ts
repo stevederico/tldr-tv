@@ -58,6 +58,26 @@ function slugify(title: string): string | null {
 }
 
 /**
+ * Pick a free slug from a base: `base`, then `base-2`, `base-3`, …
+ * Used when create omits an explicit slug so re-Watch / re-import does not 409.
+ *
+ * @param base - Valid kebab slug from slugify or client
+ * @returns Unused slug
+ */
+async function allocateUniqueSlug(base: string): Promise<string> {
+  let candidate = base;
+  for (let n = 2; n <= 100; n++) {
+    const existing = await db.getGuide(candidate);
+    if (!existing) return candidate;
+    candidate = `${base}-${n}`;
+    if (!SLUG_REGEX.test(candidate)) {
+      candidate = `${base}-v${n}`;
+    }
+  }
+  throw new Error(`No free slug available for base "${base}"`);
+}
+
+/**
  * Determine if this module is being run directly (not imported).
  *
  * @param moduleUrl - import.meta.url of the module
@@ -2028,13 +2048,20 @@ app.post("/api/guides", async (c) => {
     if (!title) return c.json({ error: "Title required" }, 400);
     if (title.length > 200) return c.json({ error: "Title too long" }, 400);
 
-    const slug = (typeof body.slug === 'string' && body.slug.trim()) || slugify(title);
-    if (!slug || !SLUG_REGEX.test(slug)) {
+    const explicitSlug = typeof body.slug === 'string' ? body.slug.trim() : '';
+    const baseSlug = explicitSlug || slugify(title);
+    if (!baseSlug || !SLUG_REGEX.test(baseSlug)) {
       return c.json({ error: "Invalid slug — use lowercase letters, numbers, and dashes" }, 400);
     }
 
-    const existing = await db.getGuide(slug);
-    if (existing) return c.json({ error: "A guide with this slug already exists", slug }, 409);
+    // Explicit slug still 409s (caller asked for that id). Auto slugs get -2, -3, …
+    let slug = baseSlug;
+    if (explicitSlug) {
+      const existing = await db.getGuide(slug);
+      if (existing) return c.json({ error: "A guide with this slug already exists", slug }, 409);
+    } else {
+      slug = await allocateUniqueSlug(baseSlug);
+    }
 
     await db.upsertGuide({
       slug,
