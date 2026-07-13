@@ -6,6 +6,12 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.77.0
+
+  Agnostic start script
+  Top-align transcript art
+  Reset stale guide jobs
+
 0.76.0
 
   Pipeline emits MP3

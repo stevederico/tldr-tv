@@ -2734,6 +2734,37 @@ export function __testStartHttpServerIfNeeded(
   return __testStartHttpServer(serveFn);
 }
 
+/**
+ * On boot, mark any guide job left in `status: 'running'` as failed.
+ *
+ * Generation jobs run only in-process, so a crash, restart, or deploy orphans
+ * them in the DB forever — the UI shows a permanent spinner and the re-kick
+ * endpoints refuse (they see `running`). Flipping stale jobs to `failed` clears
+ * the zombies so a stage can be retried.
+ *
+ * @returns Number of job stages reset
+ */
+export async function resetStaleGuideJobs(): Promise<number> {
+  let reset = 0;
+  try {
+    const guides = await db.listGuides({});
+    for (const g of guides) {
+      for (const [step, state] of Object.entries(g.jobs ?? {})) {
+        if (state.status === 'running') {
+          await db.updateGuideJob(g.slug, step, { status: 'failed', error: 'stale: server restarted' });
+          reset++;
+        }
+      }
+    }
+    if (reset > 0) logger.info('Reset stale guide jobs on startup', { count: reset });
+  } catch (err) {
+    logger.error('Failed to reset stale guide jobs', { error: (err as Error).message });
+  }
+  return reset;
+}
+
+if (shouldStartServer) void resetStaleGuideJobs();
+
 server = __testStartHttpServerIfNeeded();
 
 /**

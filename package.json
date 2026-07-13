@@ -1,7 +1,7 @@
 {
   "name": "book-player",
   "private": false,
-  "version": "0.76.0",
+  "version": "0.77.0",
   "skateboardVersion": "4.11.0",
   "type": "module",
   "workspaces": [
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "npm run front & npm run server",
     "front": "vite --force --mode development",
-    "server": "npm run --workspace=backend start",
+    "server": "cd backend && node server.ts",
     "build": "npm run typecheck && vite build --mode production",
     "prod": "npm run typecheck && vite build --mode production",
     "install-all": "npm install && npm install --workspace=backend",
@@ -47,5 +47,9 @@
     "typescript": "6.0.3",
     "vite": "8.0.13",
     "vitest": "^3.2.4"
-  }
+  },
+  "trustedDependencies": [
+    "@swc/core",
+    "onnxruntime-node"
+  ]
 }

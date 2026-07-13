@@ -747,7 +747,7 @@ export default function PlayerView() {
                     <img
                       alt="Current illustration"
                       src={heroSrc}
-                      className="relative z-[1] w-full h-full object-contain block"
+                      className="relative z-[1] w-full h-full object-contain object-top block"
                     />
                   )}
                 </div>
