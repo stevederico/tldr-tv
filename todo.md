@@ -2,6 +2,24 @@
 
 - export as video
 
+## Watch this article
+
+Open-web "Listen mode with pictures" — same pipeline (extract → TTS → images → player); two shells.
+
+### Browser extension (first)
+
+- Chrome MV3: content script extracts readable article (title, author, body) from current page
+- Selection fallback on hard/paywalled sites — only what the user can already see/select
+- POST same payload as URL import → poll jobs → open `/app/player/:slug`
+- Toolbar action: "Watch this article"
+- Never bypass paywalls / login walls
+
+### Publisher widget (later)
+
+- Embeddable "Watch this article" player (CNBC/Bloomberg Listen-style, but video/illustrated)
+- Script tag or iframe; publishers pass article URL or inline body
+- Same backend engine; branded shell + optional domain allowlist
+- B2B path after extension proves the product
 
 ## Import EPUB
 
