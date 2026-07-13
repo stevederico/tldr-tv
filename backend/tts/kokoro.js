@@ -10,9 +10,10 @@
 
 import ort from 'onnxruntime-node';
 import { phonemize } from 'phonemizer';
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, unlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { tokenizePhonemes } from './vocab.js';
 
@@ -215,23 +216,61 @@ export function silenceWav(durationSec, sampleRate = SAMPLE_RATE) {
  *   seam artifacts). The canonical single-shot encode keeps it (default).
  * @returns {Promise<Buffer>} MP3 file bytes
  */
+let wavToMp3Seq = 0;
+
 export function wavToMp3(wavBuf, { xing = true } = {}) {
-  return new Promise((resolve, reject) => {
+  // A complete Xing/Info seek header requires a SEEKABLE output: ffmpeg rewinds
+  // to frame 1 after encoding to fill in the frame count + seek TOC. Piping to
+  // stdout can't seek, so the header is left incomplete and the browser's
+  // byte↔time seek math is wrong — audible as the audio "skipping" to the wrong
+  // spot on rewind/seek. So for the canonical encode (xing=true) write to a temp
+  // file and read it back; only the streaming per-chunk path (xing=false, which
+  // wants no header anyway) keeps the fast stdout pipe.
+  if (!xing) {
+    return new Promise((res, reject) => {
+      const ff = spawn('ffmpeg', [
+        '-loglevel', 'error',
+        '-f', 'wav', '-i', 'pipe:0',
+        '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
+        '-write_xing', '0',
+        '-f', 'mp3', 'pipe:1',
+      ]);
+      const out = [];
+      const err = [];
+      ff.stdout.on('data', d => out.push(d));
+      ff.stderr.on('data', d => err.push(d));
+      ff.on('error', reject);
+      ff.on('close', code => {
+        if (code !== 0) return reject(new Error(`ffmpeg exit ${code}: ${Buffer.concat(err).toString()}`));
+        res(Buffer.concat(out));
+      });
+      ff.stdin.end(wavBuf);
+    });
+  }
+
+  const tmp = join(tmpdir(), `wav2mp3-${process.pid}-${Date.now()}-${wavToMp3Seq++}.mp3`);
+  return new Promise((res, reject) => {
     const ff = spawn('ffmpeg', [
-      '-loglevel', 'error',
+      '-loglevel', 'error', '-y',
       '-f', 'wav', '-i', 'pipe:0',
       '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
-      ...(xing ? [] : ['-write_xing', '0']),
-      '-f', 'mp3', 'pipe:1',
+      tmp, // seekable file so the Xing/Info seek header is fully written
     ]);
-    const out = [];
     const err = [];
-    ff.stdout.on('data', d => out.push(d));
     ff.stderr.on('data', d => err.push(d));
     ff.on('error', reject);
-    ff.on('close', code => {
-      if (code !== 0) return reject(new Error(`ffmpeg exit ${code}: ${Buffer.concat(err).toString()}`));
-      resolve(Buffer.concat(out));
+    ff.on('close', async code => {
+      if (code !== 0) {
+        await unlink(tmp).catch(() => {});
+        return reject(new Error(`ffmpeg exit ${code}: ${Buffer.concat(err).toString()}`));
+      }
+      try {
+        res(await readFile(tmp));
+      } catch (e) {
+        reject(e);
+      } finally {
+        await unlink(tmp).catch(() => {});
+      }
     });
     ff.stdin.end(wavBuf);
   });

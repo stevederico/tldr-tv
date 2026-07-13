@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.93.0
+
+  Fix MP3 seek header
+  Backfill guide audio
+
 0.92.0
 
   MSE stream playback
