@@ -106,6 +106,38 @@ describe('extractArticle', () => {
     assert.ok(!imgs.some((u) => u.includes('logo.png')));
   });
 
+  it('rejects small images (avatars, share buttons, emoji, tiny dimensions)', () => {
+    const doc = dom(`
+      <html><head></head>
+      <body><div class="entry-content">
+        <p>${'Paragraph with enough characters for the body extract path to keep. '.repeat(2)}</p>
+        <img src="https://cdn.example.com/hero.jpg" width="1024" height="576" />
+        <img src="https://cdn.example.com/thumbnail-50.jpg" width="48" height="48" />
+        <img src="https://secure.gravatar.com/avatar/abc.jpg" />
+        <img src="https://cdn.example.com/share-facebook.png" />
+        <img src="https://cdn.example.com/emoji/smile.png" />
+      </div></body></html>
+    `);
+    const imgs = extractPageImages(doc, { pageUrl: 'https://example.com/a' });
+    assert.ok(imgs.includes('https://cdn.example.com/hero.jpg'), 'keeps large hero');
+    assert.ok(!imgs.some((u) => u.includes('thumbnail-50')), 'drops 48px image');
+    assert.ok(!imgs.some((u) => u.includes('gravatar')), 'drops avatar');
+    assert.ok(!imgs.some((u) => u.includes('share-facebook')), 'drops share button');
+    assert.ok(!imgs.some((u) => u.includes('emoji')), 'drops emoji');
+  });
+
+  it('prefers the largest srcset candidate', () => {
+    const doc = dom(`
+      <html><head></head>
+      <body><div class="entry-content">
+        <p>${'Paragraph with enough characters for the body extract path to keep. '.repeat(2)}</p>
+        <img srcset="https://cdn.example.com/small.jpg 320w, https://cdn.example.com/large.jpg 1200w" />
+      </div></body></html>
+    `);
+    const imgs = extractPageImages(doc, { pageUrl: 'https://example.com/a' });
+    assert.ok(imgs.includes('https://cdn.example.com/large.jpg'), 'picks 1200w over 320w');
+  });
+
   it('prefers .entry-content over comment <article> bodies (MLBTR-style)', () => {
     const articleP =
       'Brewers right-hander Jacob Misiorowski was scratched from his start on Sunday due to fatigue and is expected to resume throwing soon after rest. ';

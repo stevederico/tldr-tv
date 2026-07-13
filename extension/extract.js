@@ -91,6 +91,44 @@ const ROOT_SELECTORS = [
 export const MAX_PAGE_IMAGES = 12;
 
 /**
+ * Minimum width/height (px) for a page image to qualify. Article/hero photos are
+ * large; share buttons, author avatars, emoji, and site icons are small. We only
+ * reject when a real size is known — an unmeasurable image (lazy, no attrs) is
+ * kept rather than risk dropping the main photo.
+ */
+export const MIN_IMAGE_DIM = 200;
+
+/**
+ * Best-known largest dimension (px) of an <img>, or 0 when unknown. Tries, in
+ * order: natural pixels (loaded images), width/height attributes, the largest
+ * `Nw` srcset descriptor, then the rendered box.
+ *
+ * @param {Element} img
+ * @returns {number}
+ */
+export function imageMaxDim(img) {
+  const nat = Math.max(Number(img.naturalWidth) || 0, Number(img.naturalHeight) || 0);
+  if (nat > 0) return nat;
+  const attr = Math.max(
+    parseInt(img.getAttribute('width') || '0', 10) || 0,
+    parseInt(img.getAttribute('height') || '0', 10) || 0
+  );
+  if (attr > 0) return attr;
+  let maxW = 0;
+  for (const part of (img.getAttribute('srcset') || '').split(',')) {
+    const m = part.trim().match(/\s(\d+)w$/);
+    if (m) maxW = Math.max(maxW, parseInt(m[1], 10));
+  }
+  if (maxW > 0) return maxW;
+  try {
+    const r = img.getBoundingClientRect();
+    return Math.max(r.width || 0, r.height || 0);
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Read a meta content value by name or property.
  *
  * @param {Document} doc
@@ -217,8 +255,9 @@ export function extractPageImages(doc, opts = {}) {
       return;
     }
     if (!/^https?:\/\//i.test(abs)) return;
-    // Skip obvious icons / trackers
-    if (/\b(sprite|icon|logo|avatar|emoji|1x1|pixel|badge|button)\b/i.test(abs)) return;
+    // Skip obvious icons / avatars / share buttons / trackers by URL.
+    if (/\b(sprite|icon|logo|avatar|gravatar|emoji|share|social|profile|author|widget|1x1|pixel|badge|button|spacer|blank)\b/i.test(abs)) return;
+    if (/gravatar\.com|\/emoji\//i.test(abs)) return;
     if (seen.has(abs)) return;
     seen.add(abs);
     out.push(abs);
@@ -231,20 +270,31 @@ export function extractPageImages(doc, opts = {}) {
   if (scope && typeof scope.querySelectorAll === 'function') {
     for (const img of scope.querySelectorAll('img[src], img[data-src], img[srcset]')) {
       if (isInsideComments(img)) continue;
+      // Reject small images (share buttons, avatars, emoji, icons) by measured
+      // size. Unknown size (0) is allowed — better than dropping a lazy hero.
+      const dim = imageMaxDim(img);
+      if (dim > 0 && dim < MIN_IMAGE_DIM) continue;
       const src =
         img.getAttribute('src') ||
         img.getAttribute('data-src') ||
         img.getAttribute('data-lazy-src') ||
         '';
       if (src) push(src);
-      const srcset = img.getAttribute('srcset') || '';
-      // Prefer largest candidate in srcset: "url 1x, url2 2x"
-      const last = srcset
-        .split(',')
-        .map((p) => p.trim().split(/\s+/)[0])
-        .filter(Boolean)
-        .pop();
-      if (last) push(last);
+      // Prefer the highest-resolution candidate in srcset ("url 320w, url 1024w"
+      // or "url 1x, url 2x") rather than whichever happens to be last.
+      let bestUrl = '';
+      let bestScore = -1;
+      for (const part of (img.getAttribute('srcset') || '').split(',')) {
+        const [u, desc = ''] = part.trim().split(/\s+/);
+        if (!u) continue;
+        const m = desc.match(/^(\d+(?:\.\d+)?)(w|x)$/);
+        const score = m ? Number(m[1]) * (m[2] === 'x' ? 1000 : 1) : 0;
+        if (score > bestScore) {
+          bestScore = score;
+          bestUrl = u;
+        }
+      }
+      if (bestUrl) push(bestUrl);
       if (out.length >= MAX_PAGE_IMAGES) break;
     }
   }

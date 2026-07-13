@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.98.0
+
+  Filter small images
+  Prefer large srcset
+
 0.97.0
 
   Read title first
