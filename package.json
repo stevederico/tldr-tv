@@ -22,6 +22,7 @@
     "test:backend": "npm run test --workspace=backend",
     "test:frontend": "vitest run",
     "test:build": "node --experimental-test-module-mocks --test vite.plugins.test.js scripts/verify-ui-version.test.js scripts/update-skateboard.test.js scripts/version-consistency.test.js extension/extract.test.js",
+    "test:utils": "node --experimental-strip-types --test src/utils/playerUtils.test.ts",
     "test:coverage": "npm run test:coverage:backend && npm run test:coverage:frontend && npm run test:coverage:build",
     "test:coverage:backend": "node --experimental-test-module-mocks --experimental-test-coverage --test-concurrency=1 --test backend/server.test.ts backend/server.lifecycle.test.js backend/server.prod-import.test.js backend/adapters/*.test.js backend/lib/*.test.js",
     "test:coverage:frontend": "vitest run --coverage",
