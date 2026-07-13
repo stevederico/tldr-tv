@@ -211,6 +211,14 @@ html.light, html.light body {
   --marker-active: #fff;
 }
 
+/* The video player keeps the brand red as its accent (cobalt is the app/library
+   accent). Scoped to the player subtree — its child panels inherit these vars. */
+.player-accent-red {
+  --brand: #ff3b30;
+  --brand-hot: #ff5d4a;
+  --brand-glow: 255, 59, 48;
+}
+
 @layer base {
   ::selection { background: #3b82f6; color: #fff; }
   body {

@@ -100,7 +100,7 @@ const TRANSCRIPT_SIZE_CLS: Record<TranscriptSize, string> = {
  */
 function PlayerSkeleton() {
   return (
-    <div className="max-w-full" aria-busy="true" aria-label="Loading player">
+    <div className="player-accent-red max-w-full" aria-busy="true" aria-label="Loading player">
       <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-muted">
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <Spinner className="size-8 text-muted-foreground" />
@@ -151,7 +151,7 @@ function PlayerPreparing({
           : 'Preparing your guide…';
 
   return (
-    <div className="max-w-full" aria-busy="true" aria-live="polite">
+    <div className="player-accent-red max-w-full" aria-busy="true" aria-live="polite">
       <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-black">
         {thumb ? (
           <img
@@ -898,7 +898,7 @@ export default function PlayerView() {
           </div>
         </details>
       )}
-      <div className="max-w-full">
+      <div className="player-accent-red max-w-full">
         <div>
           <div
             ref={heroRef}
@@ -1210,7 +1210,7 @@ export default function PlayerView() {
         </div>
       </div>
 
-      <div className="my-2 mx-auto mb-6 bg-transparent border-none rounded-none py-0 px-4 max-w-[1280px]">
+      <div className="player-accent-red my-2 mx-auto mb-6 bg-transparent border-none rounded-none py-0 px-4 max-w-[1280px]">
         <div className="flex flex-col gap-3 pb-4 border-b border-border">
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold uppercase tracking-[0.12em] bg-[var(--brand)] text-white px-2 py-1 rounded-[2px] leading-none">

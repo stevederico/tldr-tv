@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.104.0
+
+  Restore library grid
+  Red player accent
+
 0.103.0
 
   Editorial library redesign
