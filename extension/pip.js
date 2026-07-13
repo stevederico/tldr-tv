@@ -25,7 +25,6 @@ const buildTitle = document.getElementById('buildTitle');
 const buildStep = document.getElementById('buildStep');
 const buildBar = document.getElementById('buildBar');
 const buildBarWrap = document.getElementById('buildBarWrap');
-const buildPct = document.getElementById('buildPct');
 const playBtn = document.getElementById('play');
 const iconPlay = document.getElementById('iconPlay');
 const iconPause = document.getElementById('iconPause');
@@ -38,6 +37,9 @@ const settingsMenu = document.getElementById('settingsMenu');
 const captionEl = document.getElementById('caption');
 const ccToggle = document.getElementById('ccToggle');
 const hlToggle = document.getElementById('hlToggle');
+const flashEl = document.getElementById('flash');
+const flashPlay = document.getElementById('flashPlay');
+const flashPause = document.getElementById('flashPause');
 
 /** @type {string} */
 let appBase = 'http://localhost:5173';
@@ -352,11 +354,28 @@ function toggleSetting(which) {
   renderCaption();
 }
 
+/**
+ * Briefly show a large centered play/pause badge (YouTube-style) on a manual
+ * toggle. Restarts the CSS animation each call via a forced reflow.
+ *
+ * @param {'play' | 'pause'} kind - Icon to flash (the action just taken).
+ */
+function flashFeedback(kind) {
+  if (!(flashEl instanceof HTMLElement)) return;
+  flashPlay?.classList.toggle('is-hidden', kind !== 'play');
+  flashPause?.classList.toggle('is-hidden', kind !== 'pause');
+  flashEl.classList.remove('is-active');
+  void flashEl.offsetWidth; // reflow so the animation replays on rapid clicks
+  flashEl.classList.add('is-active');
+}
+
 function togglePlay() {
   if (!(audioEl instanceof HTMLAudioElement)) return;
   if (!audioEl.src || (playBtn instanceof HTMLButtonElement && playBtn.disabled)) return;
-  if (audioEl.paused) void audioEl.play();
+  const wasPaused = audioEl.paused;
+  if (wasPaused) void audioEl.play();
   else audioEl.pause();
+  flashFeedback(wasPaused ? 'play' : 'pause');
 }
 
 /**
@@ -387,8 +406,8 @@ function applyGuide(guide) {
     buildBar.classList.toggle('is-active', pct < 100);
   }
   if (buildBarWrap) buildBarWrap.setAttribute('aria-valuenow', String(pct));
-  if (buildPct) buildPct.textContent = `${pct}%`;
-  if (buildStep) buildStep.textContent = step;
+  // Consolidated: step + percent on one line (percent dropped once ready).
+  if (buildStep) buildStep.textContent = pct >= 100 ? step : `${step} · ${pct}%`;
 
   const audioPath = typeof g.audio === 'string' ? g.audio.trim() : '';
   const duration = Number(g.duration);

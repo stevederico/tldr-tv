@@ -15,7 +15,6 @@
         <div class="build" id="build" aria-live="polite">
           <div class="build-spinner" role="status" aria-label="Preparing"></div>
           <p class="build-title" id="buildTitle">Preparing your guide…</p>
-          <p class="build-step" id="buildStep">Starting…</p>
           <div
             class="build-bar"
             role="progressbar"
@@ -26,7 +25,7 @@
           >
             <div class="build-bar-fill" id="buildBar"></div>
           </div>
-          <p class="build-pct" id="buildPct">0%</p>
+          <p class="build-step" id="buildStep">Starting…</p>
         </div>
 
         <!-- Closed captions (karaoke word-highlight when enabled) -->
@@ -98,6 +97,14 @@
                 <line x1="10" y1="14" x2="21" y2="3" />
               </svg>
             </button>
+          </div>
+        </div>
+
+        <!-- YouTube-style play/pause flash on click (covers the video briefly) -->
+        <div class="flash" id="flash" aria-hidden="true">
+          <div class="flash-badge">
+            <svg id="flashPlay" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            <svg id="flashPause" class="is-hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
           </div>
         </div>
       </div>

@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.82.3
+
+  Add play flash
+  Consolidate loading lines
+
 0.82.2
 
   Hide stream duration
