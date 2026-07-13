@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.103.0
+
+  Editorial library redesign
+  Swiss player redesign
+
 0.102.0
 
   Fix contrast tokens

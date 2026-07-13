@@ -1,7 +1,7 @@
 {
   "name": "watch-it",
   "private": false,
-  "version": "0.102.0",
+  "version": "0.103.0",
   "skateboardVersion": "4.11.0",
   "type": "module",
   "workspaces": [

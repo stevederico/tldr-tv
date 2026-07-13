@@ -104,7 +104,7 @@ function PlayerSkeleton() {
       <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-muted">
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <Spinner className="size-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Loading guide…</p>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Loading guide</p>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-2">
           <Skeleton className="h-1.5 w-full rounded-full" />
@@ -162,9 +162,9 @@ function PlayerPreparing({
         ) : null}
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-black/50">
           <Spinner className="size-8 text-white" />
-          <p className="text-base font-medium text-white text-balance">{guide.title}</p>
-          <p className="text-sm text-white/80">{stepHint}</p>
-          <p className="text-xs text-white/60">
+          <p className="font-[family-name:var(--font-grotesk)] text-lg font-extrabold tracking-[-0.02em] text-white text-balance">{guide.title}</p>
+          <p className="font-[family-name:var(--font-mono)] text-[12px] uppercase tracking-[0.1em] text-white/85">{stepHint}</p>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] tracking-[0.04em] text-white/65">
             Playback starts when audio is ready (usually under a minute).
           </p>
         </div>
@@ -1026,10 +1026,10 @@ export default function PlayerView() {
                     )}
                   </button>
 
-                  <div className="inline-flex items-center gap-1.5 text-white text-[0.82rem] tabular-nums [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
-                    <span>{fmt(current / rate)}</span>
-                    <span className="opacity-60">/</span>
-                    <span>{fmt(dur / rate)}</span>
+                  <div className="inline-flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-white text-[0.8rem] tracking-[0.02em] tabular-nums [text-shadow:0_1px_4px_rgba(0,0,0,0.6)]">
+                    <span className="font-semibold">{fmt(current / rate)}</span>
+                    <span className="opacity-50">/</span>
+                    <span className="opacity-80">{fmt(dur / rate)}</span>
                   </div>
 
                   <PlayerChaptersMenu
@@ -1148,7 +1148,7 @@ export default function PlayerView() {
               <div
                 aria-live="polite"
                 data-split={showSplit || undefined}
-                className="absolute left-1/2 bottom-[max(56px,calc(56px+env(safe-area-inset-bottom)))] -translate-x-1/2 max-w-[min(85%,900px)] max-sm:max-w-[calc(100%-24px)] py-1.5 px-3.5 bg-black/80 rounded text-white text-[clamp(16px,2.2vw,22px)] max-sm:text-[15px] leading-[1.35] font-medium text-center pointer-events-none z-[4] text-balance group-hover/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] group-data-[controls=visible]/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] group-focus-within/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] data-[split]:left-[27.78%] data-[split]:max-w-[min(47%,500px)]"
+                className="absolute left-1/2 bottom-[max(56px,calc(56px+env(safe-area-inset-bottom)))] -translate-x-1/2 max-w-[min(85%,900px)] max-sm:max-w-[calc(100%-24px)] py-2 px-4 bg-black/85 rounded-[2px] border-l-2 border-[var(--brand-hot)] text-white font-[family-name:var(--font-grotesk)] text-[clamp(16px,2.2vw,22px)] max-sm:text-[15px] leading-[1.32] font-semibold text-center pointer-events-none z-[4] text-balance group-hover/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] group-data-[controls=visible]/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] group-focus-within/hero:bottom-[max(96px,calc(96px+env(safe-area-inset-bottom)))] data-[split]:left-[27.78%] data-[split]:max-w-[min(47%,500px)]"
               >
                 <span>{activeCaption.text}</span>
               </div>
@@ -1210,25 +1210,36 @@ export default function PlayerView() {
         </div>
       </div>
 
-      <div className="my-2 mx-auto mb-6 bg-transparent border-none rounded-none py-0 px-2 max-w-[1280px]">
-        <div className="flex flex-col gap-1 pb-2.5 pl-2">
-          <h1 className="font-['Bricolage_Grotesque',system-ui,sans-serif] text-[1.6rem] font-extrabold tracking-[-0.03em] m-0 text-foreground [font-variation-settings:'opsz'_48]">
+      <div className="my-2 mx-auto mb-6 bg-transparent border-none rounded-none py-0 px-4 max-w-[1280px]">
+        <div className="flex flex-col gap-3 pb-4 border-b border-border">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="font-[family-name:var(--font-mono)] text-[11px] font-semibold uppercase tracking-[0.12em] bg-[var(--brand)] text-white px-2 py-1 rounded-[2px] leading-none">
+              Now Watching
+            </span>
+            {guide.author && (
+              <span className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.1em] text-muted-foreground">
+                {guide.author}
+                {(guide.date || guide.publishedAt) ? ` · ${guide.date || guide.publishedAt}` : ''}
+              </span>
+            )}
+          </div>
+          <h1 className="font-[family-name:var(--font-grotesk)] text-[clamp(1.6rem,4vw,2.4rem)] font-extrabold tracking-[-0.03em] leading-[0.98] m-0 text-foreground text-balance">
             {guide.title || ''}
           </h1>
-          <div className="flex gap-2.5 items-start">
-            <div
-              aria-hidden="true"
-              className="size-9 rounded-full bg-gradient-to-br from-[var(--brand)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0"
-            >
-              {(guide.author || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase()}
+          <dl className="flex flex-wrap gap-x-8 gap-y-2 pt-1 m-0">
+            <div className="flex flex-col gap-0.5">
+              <dt className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Length</dt>
+              <dd className="font-[family-name:var(--font-mono)] text-[14px] font-semibold tabular-nums text-foreground m-0">{fmt(dur)}</dd>
             </div>
-            <div className="min-w-0">
-              {guide.author && <div className="text-[0.82rem] leading-snug font-medium text-foreground mb-0.5">{guide.author}</div>}
-              {(guide.date || guide.publishedAt) && (
-                <div className="text-[0.82rem] leading-snug font-medium text-muted-foreground">{guide.date || guide.publishedAt}</div>
-              )}
+            <div className="flex flex-col gap-0.5">
+              <dt className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Chapters</dt>
+              <dd className="font-[family-name:var(--font-mono)] text-[14px] font-semibold tabular-nums text-foreground m-0">{String(chapters.length).padStart(2, '0')}</dd>
             </div>
-          </div>
+            <div className="flex flex-col gap-0.5">
+              <dt className="font-[family-name:var(--font-mono)] text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Words</dt>
+              <dd className="font-[family-name:var(--font-mono)] text-[14px] font-semibold tabular-nums text-foreground m-0">{totalWords ? totalWords.toLocaleString() : '—'}</dd>
+            </div>
+          </dl>
         </div>
 
         <PlayerInfoPanel
@@ -1260,11 +1271,11 @@ export default function PlayerView() {
             top: `${Math.max(8, (noteSelection.rect?.top || 120) - 110)}px`,
             left: `${Math.max(8, Math.min(noteSelection.rect?.left || 100, (typeof window !== 'undefined' ? window.innerWidth : 900) - 300))}px`,
           }}
-          className="fixed z-[300] bg-card border border-border rounded-lg shadow-[0_6px_20px_rgba(0,0,0,0.45)] py-2 px-2.5 flex flex-col items-stretch gap-1.5 max-w-[360px] text-xs leading-tight pointer-events-auto"
+          className="fixed z-[300] bg-card border border-border rounded-[3px] shadow-[0_6px_20px_rgba(0,0,0,0.45)] py-2 px-2.5 flex flex-col items-stretch gap-1.5 max-w-[360px] text-xs leading-tight pointer-events-auto"
         >
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-1">
-              <span className="font-['Geist_Mono',ui-monospace,monospace] text-[#60a5fa] font-semibold text-[11px] shrink-0 tracking-[-0.5px]">
+              <span className="font-[family-name:var(--font-mono)] text-[var(--brand)] font-semibold text-[11px] shrink-0 tabular-nums tracking-[0.02em]">
                 [{fmt(noteSelection.time)}]
               </span>
               <span title={noteSelection.text} className="text-muted-foreground text-xs leading-snug italic block">
@@ -1277,13 +1288,13 @@ export default function PlayerView() {
               value={noteCustomText}
               onChange={e => setNoteCustomText(e.target.value)}
               rows={3}
-              className="w-full min-h-[58px] resize-y bg-muted text-foreground border border-border rounded p-1.5 text-xs leading-[1.35] font-['Manrope',system-ui,sans-serif] outline-none focus:border-[#3b82f6]"
+              className="w-full min-h-[58px] resize-y bg-muted text-foreground border border-border rounded-[2px] p-1.5 text-xs leading-[1.35] font-[family-name:var(--font-body)] outline-none focus:border-[var(--brand)]"
             />
             <div className="flex gap-1.5 justify-end mt-0.5">
               <button
                 type="button"
                 onClick={handleSaveNoteSelection}
-                className="bg-[var(--brand)] text-white border-none rounded px-2.5 py-px text-[11px] font-semibold cursor-pointer leading-[1.7] transition-[filter] duration-100 hover:brightness-110"
+                className="bg-[var(--brand)] text-white border-none rounded-[2px] px-2.5 py-px font-[family-name:var(--font-mono)] text-[11px] font-semibold uppercase tracking-[0.06em] cursor-pointer leading-[1.7] transition-[filter] duration-100 hover:brightness-110"
               >
                 Save note
               </button>

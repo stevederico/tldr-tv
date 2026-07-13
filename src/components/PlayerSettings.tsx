@@ -7,10 +7,10 @@ export type TranscriptSize = 'small' | 'medium' | 'large';
 export type SettingsPage = 'main' | 'textSize' | 'speed';
 
 const PANEL_DESKTOP_CLS =
-  "absolute bottom-[calc(100%+10px)] right-0 min-w-[300px] bg-[var(--glass-bg)] backdrop-blur-[22px] backdrop-saturate-[1.6] border border-[var(--glass-border)] rounded-2xl py-1.5 px-0 z-20 shadow-[0_16px_48px_rgba(0,0,0,0.55)] text-foreground font-['Manrope',system-ui,sans-serif] overflow-hidden";
+  "absolute bottom-[calc(100%+10px)] right-0 min-w-[300px] bg-[var(--glass-bg)] backdrop-blur-[22px] backdrop-saturate-[1.6] border border-[var(--glass-border)] rounded-[4px] py-1.5 px-0 z-20 shadow-[0_16px_48px_rgba(0,0,0,0.55)] text-foreground font-[family-name:var(--font-grotesk)] overflow-hidden";
 
 const PANEL_MOBILE_CLS =
-  "py-2 px-0 text-foreground font-['Manrope',system-ui,sans-serif]";
+  "py-2 px-0 text-foreground font-[family-name:var(--font-grotesk)]";
 
 const ROW_CLS =
   "grid grid-cols-[28px_1fr_auto_auto] items-center gap-x-3.5 w-full bg-transparent border-none text-inherit text-left py-3 px-[18px] text-[0.95rem] font-medium cursor-pointer transition-colors duration-150 hover:bg-foreground/5 min-h-[44px]";
@@ -173,7 +173,7 @@ export default function PlayerSettings({
                 </svg>
               </span>
               <span className="font-medium tracking-[0.01em]">Text size</span>
-              <span className="text-foreground/70 text-[0.9rem]">{TRANSCRIPT_SIZE_LABEL[transcriptSize]}</span>
+              <span className="font-[family-name:var(--font-mono)] text-foreground/70 text-[0.82rem] tabular-nums">{TRANSCRIPT_SIZE_LABEL[transcriptSize]}</span>
               <svg className="-ml-1 text-muted-foreground" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="m9 18 6-6-6-6" />
               </svg>
@@ -188,7 +188,7 @@ export default function PlayerSettings({
               </svg>
             </span>
             <span className="font-medium tracking-[0.01em]">Playback speed</span>
-            <span className="text-foreground/70 text-[0.9rem]">
+            <span className="font-[family-name:var(--font-mono)] text-foreground/70 text-[0.82rem] tabular-nums">
               {rate === 1 ? 'Normal' : rate + '×'}
             </span>
             <svg className="-ml-1 text-muted-foreground" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

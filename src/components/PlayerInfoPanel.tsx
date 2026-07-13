@@ -7,7 +7,7 @@ import type { Chapter, Guide, TranscriptParagraph } from '../utils/playerUtils';
 export type PanelTab = 'summary' | 'chapters' | 'transcript' | 'notes';
 
 const TAB_CLS =
-  "font-['Bricolage_Grotesque',system-ui,sans-serif] text-[0.92rem] font-bold tracking-[-0.01em] text-muted-foreground bg-transparent border-none py-1.5 px-3.5 rounded-full cursor-pointer transition-colors hover:text-foreground data-[active]:bg-muted data-[active]:text-foreground";
+  "relative font-[family-name:var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground bg-transparent border-none py-2 px-1 cursor-pointer transition-colors hover:text-foreground data-[active]:text-foreground data-[active]:after:content-[''] data-[active]:after:absolute data-[active]:after:left-0 data-[active]:after:right-0 data-[active]:after:-bottom-px data-[active]:after:h-0.5 data-[active]:after:bg-[var(--brand)]";
 
 /** Props for {@link PlayerInfoPanel}. */
 export interface PlayerInfoPanelProps {
@@ -71,8 +71,8 @@ export default function PlayerInfoPanel({
 }: PlayerInfoPanelProps) {
   return (
     <>
-      <div className="font-['Bricolage_Grotesque',system-ui,sans-serif] text-[1.1rem] font-bold tracking-[-0.02em] text-foreground py-2 pb-3.5 flex items-center justify-between gap-3 border-b border-border mb-1.5">
-        <div className="inline-flex gap-1 bg-card rounded-full p-[3px]" role="tablist" aria-label="Panel">
+      <div className="py-2 flex items-center justify-between gap-3 border-b-2 border-foreground mb-3">
+        <div className="inline-flex gap-6" role="tablist" aria-label="Panel">
           {([
             { key: 'summary' as const,    label: 'Summary',    show: true },
             { key: 'chapters' as const,   label: 'Chapters',   show: true },
@@ -102,12 +102,12 @@ export default function PlayerInfoPanel({
                 key={i}
                 data-active={isActive || undefined}
                 onClick={() => jumpToChapter(c, i)}
-                className="group/chapter flex items-center gap-3.5 py-3 px-3 bg-transparent border-none border-l-2 border-l-transparent cursor-pointer transition-[background-color,border-color,padding-left] duration-150 text-[0.92rem] font-medium w-full text-left text-foreground rounded hover:bg-card hover:pl-4 data-[active]:bg-muted data-[active]:border-l-[var(--brand)]"
+                className="group/chapter flex items-center gap-3.5 py-3 px-3 bg-transparent border-b border-border border-l-2 border-l-transparent cursor-pointer transition-[background-color,border-color,padding-left] duration-150 text-[0.92rem] font-medium w-full text-left text-foreground hover:bg-card hover:pl-4 data-[active]:bg-muted data-[active]:border-l-[var(--brand)]"
               >
-                <div className="font-['Manrope',system-ui,sans-serif] tabular-nums font-semibold text-muted-foreground w-[46px] shrink-0 text-[0.78rem] tracking-[0.02em] group-data-[active]/chapter:text-[var(--brand)]">
+                <div className="font-[family-name:var(--font-mono)] tabular-nums font-semibold text-muted-foreground w-[52px] shrink-0 text-[0.78rem] tracking-[0.02em] group-data-[active]/chapter:text-[var(--brand)]">
                   {fmt(c.time)}
                 </div>
-                <div className="flex-1 tracking-[-0.005em] group-data-[active]/chapter:font-bold">{c.title}</div>
+                <div className="flex-1 font-[family-name:var(--font-grotesk)] tracking-[-0.01em] group-data-[active]/chapter:font-bold">{c.title}</div>
               </div>
             );
           })}
@@ -131,7 +131,7 @@ export default function PlayerInfoPanel({
             value={notes}
             onChange={e => updateNotes(e.target.value)}
             aria-label="Notes for this guide"
-            className="w-full min-h-[320px] resize-y bg-card text-foreground border border-border rounded-xl py-3.5 px-4 font-['Manrope',system-ui,sans-serif] text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
+            className="w-full min-h-[320px] resize-y bg-card text-foreground border border-border rounded-[3px] py-3.5 px-4 font-[family-name:var(--font-body)] text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
           />
         </div>
       )}
