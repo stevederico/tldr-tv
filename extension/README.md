@@ -8,6 +8,7 @@ Chrome MV3 extension for Book Player. On any open article: extract text → `POS
 2. Chrome → `chrome://extensions` → Developer mode → **Load unpacked**
 3. Select this `extension/` folder
 4. Open a free article (blog, Substack, etc.) → click the extension → **Watch this article**
+5. After reloading the extension, **reload the article tab** (or just click Watch — it injects on demand)
 
 ## Config
 

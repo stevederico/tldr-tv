@@ -27,18 +27,61 @@ async function getActiveTab() {
 }
 
 /**
- * Ask the content script for an article payload.
+ * @param {number} tabId
+ * @param {unknown} message
+ * @returns {Promise<unknown>}
+ */
+function sendTabMessage(tabId, message) {
+  return chrome.tabs.sendMessage(tabId, message);
+}
+
+/**
+ * Inject content script if missing (pages open before install, or failed auto-inject).
  *
+ * @param {number} tabId
+ * @returns {Promise<void>}
+ */
+async function ensureContentScript(tabId) {
+  try {
+    const pong = await sendTabMessage(tabId, { type: 'PING' });
+    if (pong?.ok) return;
+  } catch {
+    // not injected yet
+  }
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content.js'],
+  });
+
+  // content.js loads extract async — brief retry for listener registration
+  let lastErr = new Error('Content script did not become ready');
+  for (let i = 0; i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    try {
+      const pong = await sendTabMessage(tabId, { type: 'PING' });
+      if (pong?.ok) return;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * @param {number} tabId
  * @returns {Promise<import('./extract.js').ExtractedArticle>}
  */
 async function extractFromTab(tabId) {
+  await ensureContentScript(tabId);
+
   let res;
   try {
-    res = await chrome.tabs.sendMessage(tabId, { type: 'EXTRACT_ARTICLE' });
-  } catch {
+    res = await sendTabMessage(tabId, { type: 'EXTRACT_ARTICLE' });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
     throw new Error(
-      'Cannot read this page. Open a normal http(s) article and try again.'
+      `Cannot read this page (${detail}). Reload the tab and try again.`
     );
   }
   if (!res?.ok) {
@@ -69,8 +112,9 @@ async function handleWatch() {
 
   try {
     const tab = await getActiveTab();
-    if (tab.url && /^(chrome|chrome-extension|edge|about|devtools):/i.test(tab.url)) {
-      throw new Error('Open a normal web article first (not a browser page).');
+    const url = tab.url || '';
+    if (!/^https?:\/\//i.test(url)) {
+      throw new Error('Open a normal http(s) article first (not a browser page).');
     }
 
     const article = await extractFromTab(tab.id);
