@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.94.0
+
+  Drop punctuation splice
+  Trust native pauses
+
 0.93.0
 
   Fix MP3 seek header

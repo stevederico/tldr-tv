@@ -8,47 +8,6 @@
 
 import { synthesize, concatWav, silenceWav, wavToMp3, KOKORO_SAMPLE_RATE } from './kokoro.js';
 
-/**
- * Extract a sample range [startSample, endSample) from a 16-bit PCM mono WAV
- * buffer and re-wrap it as a standalone WAV. Used to chop a synthesized chunk
- * into sub-segments at intra-chunk punctuation pauses without re-running the
- * model (which would lose coarticulation).
- */
-function sliceWavSamples(wavBuffer, sampleRate, startSample, endSample) {
-  const n = Math.max(0, endSample - startSample);
-  const out = Buffer.alloc(44 + n * 2);
-  out.write('RIFF', 0); out.writeUInt32LE(36 + n * 2, 4);
-  out.write('WAVE', 8); out.write('fmt ', 12);
-  out.writeUInt32LE(16, 16); out.writeUInt16LE(1, 20); out.writeUInt16LE(1, 22);
-  out.writeUInt32LE(sampleRate, 24); out.writeUInt32LE(sampleRate * 2, 28);
-  out.writeUInt16LE(2, 32); out.writeUInt16LE(16, 34);
-  out.write('data', 36); out.writeUInt32LE(n * 2, 40);
-  wavBuffer.copy(out, 44, 44 + startSample * 2, 44 + endSample * 2);
-  return out;
-}
-
-/**
- * Scan a segment's word list for punctuation that should trigger a pause,
- * returning `{ atTime, durSec }` entries (only between two real words —
- * no pause after the very last word; the chunk-seam handler covers that).
- *
- * Matches three classes:
- *   - sentence: word ends in `.!?` (optionally followed by a closing quote/paren)
- *   - dash:     word is a standalone em/en dash, or ends in one
- *   - phrase:   word ends in `,;:`
- */
-function findPunctuationPauses(words) {
-  const pauses = [];
-  for (let i = 0; i < words.length - 1; i++) {
-    const w = words[i].w;
-    const nextT = words[i + 1].t;
-    if (/[.!?]["')\]]?$/.test(w)) pauses.push({ atTime: nextT, durSec: SENTENCE_PAUSE_SEC });
-    else if (/^[—–]+$/.test(w) || /[—–]["')\]]?$/.test(w)) pauses.push({ atTime: nextT, durSec: DASH_PAUSE_SEC });
-    else if (/[,;:]["')\]]?$/.test(w)) pauses.push({ atTime: nextT, durSec: PHRASE_PAUSE_SEC });
-  }
-  return pauses;
-}
-
 // Explicit breath padding inserted between chunks. Kokoro now emits real
 // pauses for `.`/`!`/`?` natively via the punctuation tokens in its vocab
 // (~300-450ms learned from training data), since phonemizeWithPunctuation in
@@ -57,25 +16,18 @@ function findPunctuationPauses(words) {
 // silence, and paragraph breaks want extra breath beyond a sentence end.
 const PAUSE_MS = { sentence: 150, paragraph: 700, none: 0 };
 
-// Intra-chunk punctuation splice — dialed down since Kokoro now produces
-// the bulk of each pause natively (was 300/450/600 when punctuation was
-// stripped from input; native pauses now contribute most of the breath).
-// Tune up if a particular punctuation still feels rushed after regenerating.
-//   comma/colon/semicolon: ~100ms additional on top of ~200ms native
-//   em/en dash:            ~150ms additional on top of ~150ms native
-//   period/!/?:            ~150ms additional on top of ~400ms native
-const PHRASE_PAUSE_SEC = 0.10;
-const DASH_PAUSE_SEC = 0.15;
+// Breath inserted only at a synthesizeGuide segment seam (a chunk that had to be
+// split on a sentence boundary). Intra-chunk punctuation pauses are left to
+// Kokoro's native output — splicing our own silence from per-word timings chopped
+// tokens Kokoro expands (e.g. the year "2026"). ~400ms native period pause + this.
 const SENTENCE_PAUSE_SEC = 0.15;
 
 /**
  * Pre-process a transcript so the TTS and frontend tokenizers both see em/en
  * dashes as standalone tokens. Espeak emits ~zero pause for an inline `—`
- * (e.g. "word—word"), and our punctuation-pause detector only sees the END
- * of each word, so inline dashes get no audible break. Splitting them out
- * makes them their own token: Kokoro speaks a brief pause, the detector adds
- * DASH_PAUSE_SEC of silence, and the frontend transcript (which also splits
- * on whitespace) lines up word-for-word with the timing stream.
+ * (e.g. "word—word"). Splitting them out makes each dash its own token so
+ * Kokoro speaks a brief natural pause, and the frontend transcript (which also
+ * splits on whitespace) lines up word-for-word with the timing stream.
  *
  * Also converts `--` and `---` to `—` so prose using ASCII dashes gets the
  * same treatment.
@@ -244,57 +196,23 @@ export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 
     for (let segIdx = 0; segIdx < result.length; segIdx++) {
       const segment = result[segIdx];
       const sr = segment.sampleRate || KOKORO_SAMPLE_RATE;
-      const totalSamples = Math.floor(segment.durationSec * sr);
-      const pauses = findPunctuationPauses(segment.words);
 
-      if (!pauses.length) {
-        for (const w of segment.words) {
-          words.push({ w: w.w, t: Number((w.t + elapsed).toFixed(3)) });
-        }
-        wavs.push(segment.audioWav);
-        elapsed += segment.durationSec;
-        continue;
+      // Push the segment's audio and word timings verbatim. Kokoro emits its own
+      // natural pauses for . ! ? , ; : (its punctuation tokens), correctly placed
+      // in the rendered audio. We used to splice EXTRA silence at each mark using
+      // Kokoro's per-word timings — but those timings drift for tokens Kokoro
+      // expands (e.g. the year "2026" → "twenty twenty-six"), so the inserted
+      // silence landed mid-word and chopped it, audible as a "skip" inside the
+      // word. Trusting Kokoro's native pauses removes the misplaced cut.
+      for (const w of segment.words) {
+        words.push({ w: w.w, t: Number((w.t + elapsed).toFixed(3)) });
       }
+      wavs.push(segment.audioWav);
+      elapsed += segment.durationSec;
 
-      // Split the rendered audio at each punctuation boundary and interleave
-      // silence. Word timings shift by the cumulative inserted silence so the
-      // highlighter stays aligned with the audio post-splice.
-      const splitSamples = pauses.map(p =>
-        Math.max(0, Math.min(totalSamples, Math.round(p.atTime * sr)))
-      );
-      const boundaries = [0, ...splitSamples, totalSamples];
-      let wIdx = 0;
-      for (let bi = 0; bi < boundaries.length - 1; bi++) {
-        const startS = boundaries[bi];
-        const endS = boundaries[bi + 1];
-        if (endS <= startS) continue;
-        const subStartT = startS / sr;
-        const subEndT = endS / sr;
-        const subDur = subEndT - subStartT;
-        while (wIdx < segment.words.length && segment.words[wIdx].t < subEndT) {
-          const localT = segment.words[wIdx].t - subStartT;
-          words.push({ w: segment.words[wIdx].w, t: Number((elapsed + localT).toFixed(3)) });
-          wIdx++;
-        }
-        wavs.push(sliceWavSamples(segment.audioWav, sr, startS, endS));
-        elapsed += subDur;
-        if (bi < pauses.length) {
-          const pauseSec = pauses[bi].durSec;
-          wavs.push(silenceWav(pauseSec, sr));
-          elapsed += pauseSec;
-        }
-      }
-      while (wIdx < segment.words.length) {
-        const localT = segment.words[wIdx].t - (totalSamples / sr);
-        words.push({ w: segment.words[wIdx].w, t: Number((elapsed + localT).toFixed(3)) });
-        wIdx++;
-      }
-
-      // Inter-segment seam pause. Only fires when synthesizeWithFallback had to
-      // split a chunk (recoverable-error retry path) — those splits happen on
-      // sentence boundaries, so the LAST word of every non-final segment ends
-      // in `.!?` and deserves a sentence-grade breath. findPunctuationPauses
-      // intentionally skips the last word, so we handle it here.
+      // Inter-segment seam pause. Only fires when synthesizeWithFallback split a
+      // chunk on a sentence boundary (recoverable-error retry) — the last word
+      // ends in `.!?` and deserves a sentence-grade breath.
       if (segIdx < result.length - 1) {
         wavs.push(silenceWav(SENTENCE_PAUSE_SEC, sr));
         elapsed += SENTENCE_PAUSE_SEC;
