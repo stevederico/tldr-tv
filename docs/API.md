@@ -325,6 +325,35 @@ Multipart upload. Stores the file at `backend/public/audio/<slug>.mp3` and updat
 
 ---
 
+> **Live captions during streaming:** while TTS is rendering, `GET /api/guides/:slug`
+> merges the streaming timing sidecar (`<slug>.parts/timing.json` — cumulative
+> per-word timings + normalized transcript) into the response, so the PiP can
+> show word-synced captions for the portion already rendered. Once TTS finishes,
+> the DB row's canonical `timing`/`transcript` are returned instead.
+
+#### GET /api/guides/:slug/stream.mp3
+Progressive audio for fast playback start. While TTS is still rendering, the
+background job feeds each chunk's PCM into one continuous ffmpeg encoder that
+writes a single growing `<slug>.parts/stream.mp3`; this endpoint tails that file
+over a chunked-transfer response, holding the connection open and appending new
+bytes as they land. One encoder (not per-chunk MP3s concatenated) means no
+encoder-delay silence at chunk seams — gapless audio. The player starts within
+~1-2s instead of waiting for the whole render. Once the canonical `<slug>.mp3`
+exists, the endpoint `302`-redirects to it (Range-seekable).
+
+**Response:**
+- `200` — `audio/mpeg`, `Transfer-Encoding: chunked` (live render in progress)
+- `302` — redirect to `/audio/<slug>.mp3` (render finished)
+
+Served with `Cross-Origin-Resource-Policy: cross-origin` so the extension PiP
+(`chrome-extension://` origin) can play it.
+
+**Errors:**
+- `400` — invalid slug
+- `404` — no render in progress and no canonical file (TTS not started)
+
+---
+
 ### Payments (Stripe)
 
 #### POST /api/checkout

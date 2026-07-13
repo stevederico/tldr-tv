@@ -455,6 +455,64 @@ export function resolveAsset(p: string | undefined | null): string {
 }
 
 /**
+ * True when the guide has audio ready for the player (URL + positive duration).
+ * Extension/create opens the player while the pipeline still runs — use this to
+ * avoid rendering a broken black player with 0:00 length.
+ *
+ * @param g - Guide payload or null
+ * @returns Whether playback UI should mount
+ */
+export function isGuidePlayable(g: Guide | null | undefined): boolean {
+  if (!g) return false;
+  const audio = typeof g.audio === 'string' ? g.audio.trim() : '';
+  const duration = Number(g.duration);
+  return audio.length > 0 && Number.isFinite(duration) && duration > 0;
+}
+
+/**
+ * True when any background job is still running (audio may already be playable
+ * while chapter images finish). Used for keep-polling, not for gating the player.
+ *
+ * @param g - Guide payload or null
+ * @returns Whether jobs are still in flight
+ */
+export function hasRunningGuideJobs(g: Guide | null | undefined): boolean {
+  if (!g?.jobs) return false;
+  return Object.values(g.jobs).some((j) => j?.status === 'running');
+}
+
+/**
+ * True when the guide is still being built and not playable yet (preparing UI).
+ *
+ * @param g - Guide payload or null
+ * @returns Whether to show the preparing/skeleton state
+ */
+export function isGuideBuilding(g: Guide | null | undefined): boolean {
+  if (!g || isGuidePlayable(g)) return false;
+  if (g.jobs?.pipeline?.status === 'failed') return false;
+  if (hasRunningGuideJobs(g)) return true;
+  if (!g.audio || !Number(g.duration)) return true;
+  return false;
+}
+
+/**
+ * Human-readable pipeline failure message, if any.
+ *
+ * @param g - Guide payload or null
+ * @returns Error string or null
+ */
+export function guideBuildError(g: Guide | null | undefined): string | null {
+  if (!g?.jobs) return null;
+  if (g.jobs.pipeline?.status === 'failed') {
+    return g.jobs.pipeline.error || 'Guide generation failed';
+  }
+  if (g.jobs.tts?.status === 'failed') {
+    return g.jobs.tts.error || 'Audio generation failed';
+  }
+  return null;
+}
+
+/**
  * Find the index of the active chapter at time `t` (last chapter started <= t).
  *
  * @param chapters - Guide chapters.

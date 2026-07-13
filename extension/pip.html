@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Watch</title>
+    <link rel="stylesheet" href="pip.css" />
+  </head>
+  <body>
+    <div class="player" id="root" data-paused="true">
+      <div class="hero" id="hero">
+        <div class="hero-blur" id="blur" aria-hidden="true"></div>
+        <img id="cover" class="hero-img" alt="" hidden />
+
+        <div class="build" id="build" aria-live="polite">
+          <div class="build-spinner" role="status" aria-label="Preparing"></div>
+          <p class="build-title" id="buildTitle">Preparing your guide…</p>
+          <div
+            class="build-bar"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            id="buildBarWrap"
+          >
+            <div class="build-bar-fill" id="buildBar"></div>
+          </div>
+          <p class="build-step" id="buildStep">Starting…</p>
+        </div>
+
+        <!-- Closed captions (karaoke word-highlight when enabled) -->
+        <div class="caption" id="caption" aria-live="polite" hidden></div>
+
+        <div class="overlay" id="overlay" data-overlay>
+          <div class="timeline" id="timeline">
+            <div class="timeline-track">
+              <div class="timeline-fill" id="fill"></div>
+              <div class="timeline-thumb" id="thumb"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button type="button" id="play" class="icon-btn" aria-label="Play" title="Play/Pause" disabled>
+              <svg id="iconPlay" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+              <svg id="iconPause" class="is-hidden" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+            </button>
+            <div class="time" id="time">0:00 / 0:00</div>
+
+            <div class="spacer"></div>
+
+            <div class="menu-wrap" data-overlay>
+              <button type="button" id="settingsBtn" class="icon-btn" aria-label="Settings" aria-haspopup="menu" aria-expanded="false" title="Settings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+              <div class="menu" id="settingsMenu" role="menu" hidden>
+                <p class="menu-label">Display</p>
+                <button type="button" class="menu-item menu-toggle" id="ccToggle" data-toggle="cc" role="menuitemcheckbox" aria-checked="true">
+                  <span>Captions</span>
+                  <svg class="menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+                </button>
+                <button type="button" class="menu-item menu-toggle" id="hlToggle" data-toggle="hl" role="menuitemcheckbox" aria-checked="true">
+                  <span>Highlight words</span>
+                  <svg class="menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+                </button>
+                <p class="menu-label">Playback speed</p>
+                <button type="button" class="menu-item" data-rate="0.75" role="menuitem">0.75×</button>
+                <button type="button" class="menu-item" data-rate="1" role="menuitem">Normal</button>
+                <button type="button" class="menu-item" data-rate="1.25" role="menuitem">1.25×</button>
+                <button type="button" class="menu-item" data-rate="1.5" role="menuitem">1.5×</button>
+                <button type="button" class="menu-item" data-rate="2" role="menuitem">2×</button>
+              </div>
+            </div>
+
+            <!-- One fullscreen control (expand/compress swapped via .is-hidden) -->
+            <button type="button" id="fsBtn" class="icon-btn" aria-label="Full screen" title="Full screen">
+              <svg id="iconExpand" class="fs-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </svg>
+              <svg id="iconCompress" class="fs-icon is-hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+              </svg>
+            </button>
+
+            <!-- External link: open full web player in a new tab (right of fullscreen) -->
+            <button type="button" id="openBtn" class="icon-btn" aria-label="Open full player" title="Open full player">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- YouTube-style play/pause flash on click (covers the video briefly) -->
+        <div class="flash" id="flash" aria-hidden="true">
+          <div class="flash-badge">
+            <svg id="flashPlay" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
+            <svg id="flashPause" class="is-hidden" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+          </div>
+        </div>
+      </div>
+      <audio id="audio" preload="auto"></audio>
+    </div>
+    <script type="module" src="pip.js"></script>
+  </body>
+</html>

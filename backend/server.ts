@@ -6,19 +6,21 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { secureHeaders } from 'hono/secure-headers'
 import { cors } from 'hono/cors'
+import { stream } from 'hono/streaming'
 import Stripe from "stripe";
 import crypto from "crypto";
 
 import { databaseManager } from "./adapters/manager.ts";
-import { synthesize } from "./tts/kokoro.js";
+import { synthesize, KOKORO_SAMPLE_RATE } from "./tts/kokoro.js";
 import { generateChapters } from "./tts/chapters.js";
 import { analyzeTranscript, attachChapterTimes } from "./tts/analyze.js";
 import { synthesizeGuide } from "./tts/tts-pipeline.js";
 import { generateImage, extFromContentType, pLimit } from "./utils/grokImagine.js";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
-import { writeFile, mkdir as mkdirP } from 'node:fs/promises';
+import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync, existsSync, createWriteStream, openSync, readSync, closeSync } from 'node:fs';
+import { writeFile, mkdir as mkdirP, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { BackendConfig, BoundDatabase, CsrfTokenEntry, DatabaseConfig, JwtPayload, Logger, Subscription, UserSetFields, Guide, GuideInput, GuideChapter, GuideTiming } from './types.ts';
 import { createLogger } from './lib/logger.ts';
@@ -55,6 +57,26 @@ function slugify(title: string): string | null {
   if (typeof title !== 'string') return null;
   const s = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return s.length ? s : null;
+}
+
+/**
+ * Pick a free slug from a base: `base`, then `base-2`, `base-3`, …
+ * Used when create omits an explicit slug so re-Watch / re-import does not 409.
+ *
+ * @param base - Valid kebab slug from slugify or client
+ * @returns Unused slug
+ */
+async function allocateUniqueSlug(base: string): Promise<string> {
+  let candidate = base;
+  for (let n = 2; n <= 100; n++) {
+    const existing = await db.getGuide(candidate);
+    if (!existing) return candidate;
+    candidate = `${base}-${n}`;
+    if (!SLUG_REGEX.test(candidate)) {
+      candidate = `${base}-v${n}`;
+    }
+  }
+  throw new Error(`No free slug available for base "${base}"`);
 }
 
 /**
@@ -641,6 +663,27 @@ export function __testBuildSecureHeadersOptions(prod: boolean = isProd()) {
   };
 }
 
+// Public content assets (audio + images) are meant to be embedded cross-origin —
+// e.g. the Chrome extension's PiP player runs on a chrome-extension:// origin and
+// loads the <audio> from this backend. secureHeaders() sets a global
+// Cross-Origin-Resource-Policy: same-origin that blocks those cross-origin loads.
+// Registered BEFORE secureHeaders so its post-response header-set runs afterward
+// (onion model) and wins for these asset routes only; API routes keep same-origin.
+app.use('/audio/*', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+app.use('/images/*', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+// The live TTS stream is played by the extension PiP's <audio> on a
+// chrome-extension:// origin — same cross-origin embedding as /audio/*.
+app.use('/api/guides/:slug/stream.mp3', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+
 app.use('*', secureHeaders(__testBuildSecureHeadersOptions()));
 
 /**
@@ -1100,26 +1143,40 @@ app.post("/api/fetch-url", async (c) => {
       ? decodeHtmlEntities(titleMatch[1]).replace(/\s+/g, ' ').trim().replace(/\s*[|–—].*$/, '')
       : 'Untitled';
 
-    // Strip noise once, up front
+    // Strip noise once, up front. Drop comment blocks before container match —
+    // WordPress/MLBTR wrap each comment in <article class="comment-body">, which
+    // otherwise wins over the real post body.
     const cleaned = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '');
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<section[^>]+id=["']comments["'][^>]*>[\s\S]*?<\/section>/gi, '')
+      .replace(/<div[^>]+id=["']comments["'][^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<ol[^>]+class=["'][^"']*comment-list[^"']*["'][^>]*>[\s\S]*?<\/ol>/gi, '')
+      .replace(/<ul[^>]+class=["'][^"']*comment-list[^"']*["'][^>]*>[\s\S]*?<\/ul>/gi, '')
+      .replace(/<article[^>]+class=["'][^"']*comment-body[^"']*["'][^>]*>[\s\S]*?<\/article>/gi, '');
 
-    // Try to find the main content container (rough priority order)
+    // Prefer entry/post content before bare <article> (comments use <article> too).
     const containerRegexes = [
-      /<article[^>]*>([\s\S]*?)<\/article>/i,
-      /<main[^>]*>([\s\S]*?)<\/main>/i,
+      /<div[^>]+class=["'][^"']*\bentry-content\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class=["'][^"']*\b(?:post-content|article-body|article-content|post-body)\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+(?:id|class)=["'][^"']*(?:post|article|content|entry-content|post-content|article-body)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      /<main[^>]*>([\s\S]*?)<\/main>/i,
+      /<article(?![^>]*comment-body)[^>]*>([\s\S]*?)<\/article>/i,
     ];
 
     let mainHtml = '';
+    let bestLen = 0;
     for (const regex of containerRegexes) {
       const match = cleaned.match(regex);
-      if (match && match[1].length > 500) {
+      if (match && match[1].length > bestLen && match[1].length > 200) {
         mainHtml = match[1];
-        break;
+        bestLen = match[1].length;
+        // entry-content / post-content are high confidence — stop early
+        if (regex.source.includes('entry-content') || regex.source.includes('post-content')) {
+          break;
+        }
       }
     }
 
@@ -1243,6 +1300,15 @@ app.get("/api/guides/:slug", async (c) => {
     if (!guide) return c.json({ error: "Guide not found" }, 404);
     if (guide.visibility && guide.visibility !== 'public') {
       return c.json({ error: "Guide not found" }, 404);
+    }
+    // While TTS is still rendering, the DB row has no timing yet. Merge the
+    // streaming sidecar (partial word timings + normalized transcript) so the
+    // PiP can show live captions for the portion already rendered. Doesn't touch
+    // the DB — the final upsert writes the canonical transcript/timing.
+    const partsDir = ttsPartsDir(resolve(__dirname, './public/audio'), slug);
+    const partial = readTtsTiming(partsDir);
+    if (__testShouldMergeStreamTiming(guide, partial)) {
+      return c.json({ ...guide, transcript: partial.transcript, timing: { words: partial.words } });
     }
     return c.json(guide);
   } catch (e) {
@@ -1443,9 +1509,247 @@ app.post("/api/guides/:slug/tts", async (c) => {
   }
 });
 
+// Progressive audio stream: tail the single growing `<slug>.parts/stream.mp3`
+// (one continuous encode — no per-chunk seam gaps) so the player starts within
+// ~1-2s instead of waiting for the full guide. Once the canonical file exists we
+// redirect to it (Range-seekable).
+app.get('/api/guides/:slug/stream.mp3', async (c) => {
+  const slug = c.req.param('slug');
+  if (!SLUG_REGEX.test(slug)) return c.json({ error: 'Invalid slug' }, 400);
+
+  const audioDir = resolve(__dirname, './public/audio');
+  const canonical = resolve(audioDir, `${slug}.mp3`);
+  // Finished render → hand off to the static file (supports Range/seeking).
+  if (existsSync(canonical)) return c.redirect(`/audio/${slug}.mp3`, 302);
+
+  const partsDir = ttsPartsDir(audioDir, slug);
+  if (!readTtsState(partsDir)) return c.json({ error: 'Not generating' }, 404);
+  const streamFile = resolve(partsDir, 'stream.mp3');
+
+  c.header('Content-Type', 'audio/mpeg');
+  c.header('Cache-Control', 'no-store');
+  // Defeat proxy buffering so bytes reach the client as they're written.
+  c.header('X-Accel-Buffering', 'no');
+
+  const POLL_MS = 150;
+  const MAX_IDLE_MS = 120_000;
+  return stream(c, async (s) => {
+    let offset = 0;
+    let idleMs = 0;
+    while (!s.aborted) {
+      let size = 0;
+      try {
+        size = statSync(streamFile).size;
+      } catch {
+        size = 0; // file not created yet
+      }
+      const decision = __testStreamTailNext(offset, size, readTtsState(partsDir));
+      if (decision === 'write') {
+        try {
+          await s.write(readFileRange(streamFile, offset, size - offset));
+        } catch {
+          break; // client went away
+        }
+        offset = size;
+        idleMs = 0;
+        continue;
+      }
+      if (decision === 'end') break;
+      if (idleMs >= MAX_IDLE_MS) break; // stalled render — don't hang forever
+      await s.sleep(POLL_MS);
+      idleMs += POLL_MS;
+    }
+  });
+});
+
+/** Read `length` bytes from `path` starting at `start`. */
+function readFileRange(path: string, start: number, length: number): Buffer {
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(length);
+    const n = readSync(fd, buf, 0, length, start);
+    return buf.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Pure state-machine step for the stream tail loop: given the bytes already
+ * sent, the current file size, and the render state, decide whether to send new
+ * bytes, wait, or end. Extracted for unit testing.
+ *
+ * @param offset - Bytes already written to the client
+ * @param size - Current size of the stream file on disk
+ * @param state - Current streaming state, or null when the state file is gone
+ * @returns 'write' to send new bytes, 'end' to close, 'wait' to poll again
+ */
+export function __testStreamTailNext(
+  offset: number,
+  size: number,
+  state: TtsStreamState | null
+): 'write' | 'end' | 'wait' {
+  if (size > offset) return 'write';
+  if (!state || state.failed) return 'end';
+  if (state.done && offset >= size) return 'end'; // fully drained
+  return 'wait';
+}
+
+/** Live state of an in-progress streaming TTS render, persisted per slug. */
+interface TtsStreamState {
+  /** Total source chunks (0 until the first onProgress). */
+  chunksTotal: number;
+  /** Chunks whose MP3 part has been written. */
+  chunksDone: number;
+  /** All parts written and canonical file persisted. */
+  done: boolean;
+  /** Synthesis failed — streaming clients should stop. */
+  failed: boolean;
+}
+
+/** Directory holding a slug's streaming artifacts (stream.mp3 + state + timing). */
+function ttsPartsDir(audioDir: string, slug: string): string {
+  return resolve(audioDir, `${slug}.parts`);
+}
+
+/** Write the streaming state file (best-effort, never throws). */
+function writeTtsState(partsDir: string, state: TtsStreamState): void {
+  try {
+    writeFileSync(resolve(partsDir, 'state.json'), JSON.stringify(state));
+  } catch {
+    /* best-effort */
+  }
+}
+
+/**
+ * Whether a guide GET should merge the streaming partial-timing sidecar into
+ * the response: only while TTS is still running, the DB row has no final timing,
+ * and the sidecar actually has words. Extracted for unit testing.
+ *
+ * @param guide - The DB guide row
+ * @param partial - The parsed sidecar timing, or null
+ * @returns True when the partial timing should be merged in
+ */
+export function __testShouldMergeStreamTiming(
+  guide: Guide,
+  partial: TtsStreamTiming | null
+): partial is TtsStreamTiming {
+  const hasFinalTiming = Array.isArray(guide.timing?.words) && guide.timing.words.length > 0;
+  return !hasFinalTiming && guide.jobs?.tts?.status === 'running' && !!partial && partial.words.length > 0;
+}
+
+/** Partial timing streamed alongside audio chunks (for live captions). */
+interface TtsStreamTiming {
+  /** Cumulative per-word timings for the portion rendered so far. */
+  words: Array<{ w: string; t: number }>;
+  /** Normalized transcript the timings tokenize against. */
+  transcript: string;
+}
+
+/** Write the streaming partial-timing sidecar (best-effort, never throws). */
+function writeTtsTiming(partsDir: string, timing: TtsStreamTiming): void {
+  try {
+    writeFileSync(resolve(partsDir, 'timing.json'), JSON.stringify(timing));
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Read the streaming partial-timing sidecar, or null when absent/corrupt. */
+function readTtsTiming(partsDir: string): TtsStreamTiming | null {
+  try {
+    const raw = readFileSync(resolve(partsDir, 'timing.json'), 'utf8');
+    const t = JSON.parse(raw) as Partial<TtsStreamTiming>;
+    if (!Array.isArray(t.words) || typeof t.transcript !== 'string') return null;
+    return { words: t.words, transcript: t.transcript };
+  } catch {
+    return null;
+  }
+}
+
+/** Read the streaming state file, or null when absent/corrupt. */
+function readTtsState(partsDir: string): TtsStreamState | null {
+  try {
+    const raw = readFileSync(resolve(partsDir, 'state.json'), 'utf8');
+    const s = JSON.parse(raw) as Partial<TtsStreamState>;
+    return {
+      chunksTotal: Number(s.chunksTotal) || 0,
+      chunksDone: Number(s.chunksDone) || 0,
+      done: s.done === true,
+      failed: s.failed === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A continuous PCM→MP3 encoder writing to a single growing stream file. */
+interface TtsStreamEncoder {
+  /** Feed a chunk of 16-bit mono PCM; resolves once the write is buffered/drained. */
+  write: (pcm: Buffer) => Promise<void>;
+  /** Close stdin and resolve once all MP3 output is flushed to the file. */
+  end: () => Promise<void>;
+  /** Hard-stop the subprocess (failure path). */
+  kill: () => void;
+}
+
+/**
+ * Spawn one long-lived ffmpeg that reads raw PCM (16-bit mono @
+ * KOKORO_SAMPLE_RATE) on stdin and writes a single continuous MP3 to
+ * `streamFile`. One encoder for the whole render means one encoder delay at the
+ * very start, so there are no per-chunk seam gaps (the audible trip/pop).
+ *
+ * @param streamFile - Destination MP3 path (grows as chunks are fed)
+ * @returns Encoder handle
+ */
+function createTtsStreamEncoder(streamFile: string): TtsStreamEncoder {
+  const ff = spawn('ffmpeg', [
+    '-loglevel', 'error',
+    '-f', 's16le', '-ar', String(KOKORO_SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0',
+    '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
+    '-f', 'mp3', 'pipe:1',
+  ]);
+  const out = createWriteStream(streamFile);
+  ff.stdout.pipe(out);
+  // Swallow all stream/process errors so a broken pipe (EPIPE when ffmpeg exits
+  // or is killed) never bubbles to an unhandled 'error' event — which would be
+  // re-thrown by the phonemizer runtime's global handlers and crash the process.
+  // Real failures surface via the job's try/catch (empty/short audio).
+  ff.stderr.on('data', () => {});
+  ff.on('error', () => {});
+  ff.stdin.on('error', () => {});
+  ff.stdout.on('error', () => {});
+  out.on('error', () => {});
+  return {
+    write: (pcm) =>
+      new Promise((res) => {
+        if (!ff.stdin.writable) return res();
+        if (ff.stdin.write(pcm)) res();
+        else ff.stdin.once('drain', res);
+      }),
+    end: () =>
+      new Promise((res) => {
+        out.on('close', () => res());
+        out.on('error', () => res());
+        ff.on('error', () => res());
+        ff.stdin.end();
+      }),
+    kill: () => {
+      try {
+        ff.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    },
+  };
+}
+
 /**
  * Background TTS job: synthesize the full transcript and persist results.
  * Updates Guides.jobs_json on progress and on terminal state (done/failed).
+ * Also streams the audio to `<slug>.parts/stream.mp3` (via one continuous
+ * encoder) + a timing sidecar as it renders, so the stream endpoint can start
+ * gapless playback before the full render finishes.
  *
  * @param {string} slug
  * @param {Object} guide - The guide payload at job kickoff
@@ -1453,10 +1757,26 @@ app.post("/api/guides/:slug/tts", async (c) => {
  */
 async function runTtsJob(slug: string, guide: Guide): Promise<void> {
   const t0 = Date.now();
+  const audioDir = resolve(__dirname, './public/audio');
+  const partsDir = ttsPartsDir(audioDir, slug);
+  let encoder: TtsStreamEncoder | null = null;
   try {
-    const audioDir = resolve(__dirname, './public/audio');
     await mkdirP(audioDir, { recursive: true });
     const outPath = resolve(audioDir, `${slug}.mp3`);
+
+    // Fresh parts dir for the streaming artifacts (clear any stale prior run).
+    await rm(partsDir, { recursive: true, force: true }).catch(() => {});
+    await mkdirP(partsDir, { recursive: true });
+    const state: TtsStreamState = { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
+    writeTtsState(partsDir, state);
+
+    // One continuous encoder for the whole stream: chunk PCM goes in, a single
+    // growing MP3 comes out. Encoding each chunk to its own MP3 and
+    // concatenating them adds ~a frame of encoder-delay silence at every seam
+    // (audible trip/pop) — one encoder has a single delay at the very start.
+    const streamFile = resolve(partsDir, 'stream.mp3');
+    const enc = createTtsStreamEncoder(streamFile);
+    encoder = enc; // outer ref so the catch can tear it down
 
     const { audioMp3, words, totalDuration, transcript: normalizedTranscript } = await synthesizeGuide({
       transcript: guide.transcript ?? '',
@@ -1464,9 +1784,27 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
         // Best-effort progress write — errors here shouldn't kill the job.
         db.updateGuideJob(slug, 'tts', { chunksDone, chunksTotal }).catch(() => {});
       },
+      onChunk: async (pcm, { index, chunksTotal, words, transcript: normalized }) => {
+        // Feed the chunk's PCM into the continuous encoder (backpressure-aware).
+        await enc.write(pcm);
+        // Sidecar: cumulative word timings + normalized transcript so the
+        // player can render captions for the portion rendered so far.
+        writeTtsTiming(partsDir, { words, transcript: normalized });
+        state.chunksTotal = chunksTotal;
+        state.chunksDone = index + 1;
+        writeTtsState(partsDir, state);
+      },
     });
 
+    // Flush + finish the stream encoder before marking done so tailing clients
+    // read a complete file.
+    await enc.end();
     await writeFile(outPath, audioMp3);
+    // Canonical file is ready — mark parts done so streams drain and finish,
+    // then drop the parts dir after a grace period for any in-flight readers.
+    state.done = true;
+    writeTtsState(partsDir, state);
+    scheduleTtsPartsCleanup(partsDir);
 
     // Persist the normalized transcript so the frontend tokenizer produces the
     // same tokens (em/en dashes are split out) as the timing stream — otherwise
@@ -1489,6 +1827,12 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
     logger.info('TTS job done', { slug, durationSec: totalDuration, words: words.length, ms: Date.now() - t0 });
   } catch (err) {
     logger.error('TTS job failed', { slug, error: (err as Error).message });
+    // Tear down the encoder subprocess so it doesn't dangle.
+    encoder?.kill();
+    // Signal streaming clients to stop, then clean up partial artifacts.
+    const failed = readTtsState(partsDir) ?? { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
+    writeTtsState(partsDir, { ...failed, failed: true });
+    scheduleTtsPartsCleanup(partsDir);
     await db.updateGuideJob(slug, 'tts', {
       status: 'failed',
       error: (err as Error).message || 'Unknown error',
@@ -1496,6 +1840,22 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
       finishedAt: Date.now(),
     }).catch(() => {});
   }
+}
+
+/** Grace period before deleting streaming parts so in-flight readers drain. */
+const TTS_PARTS_CLEANUP_MS = 60_000;
+
+/**
+ * Remove a slug's streaming parts dir after a grace period. Once the canonical
+ * `<slug>.mp3` exists the stream endpoint redirects to it, so lingering parts
+ * only serve readers that connected mid-render.
+ *
+ * @param partsDir - The `<slug>.parts` directory to remove
+ */
+function scheduleTtsPartsCleanup(partsDir: string): void {
+  setTimeout(() => {
+    rm(partsDir, { recursive: true, force: true }).catch(() => {});
+  }, TTS_PARTS_CLEANUP_MS).unref?.();
 }
 
 // Re-scrape the source URL to fill in / refresh guide.date.
@@ -1804,15 +2164,20 @@ async function runChapterRealImagesJob(slug: string): Promise<void> {
  * Stages:
  *   1. parallel: analyze (author + summary + chapter outlines), thumbnail, tts
  *   2. attach chapter times (no API call) once words are available
- *   3. chapter-images (Grok Imagine). Unsplash real-images are no longer
- *      part of the default pipeline — generated is the only forward mode.
+ *   3. chapter-images (Grok Imagine) — skipped when opts.skipImages is set
+ *      (extension PiP uses blog photos as a slideshow instead).
  *
  * Errors in one branch do not abort other branches.
  *
- * @param {string} slug
+ * @param slug - Guide slug
+ * @param opts - Pipeline options
+ * @param opts.skipImages - When true, do not run Grok chapter-image generation
  * @returns {Promise<void>}
  */
-async function runFullPipeline(slug: string): Promise<void> {
+async function runFullPipeline(
+  slug: string,
+  opts: { skipImages?: boolean } = {}
+): Promise<void> {
   const pipeT0 = Date.now();
   await db.updateGuideJob(slug, 'pipeline', { status: 'running', startedAt: Date.now(), error: null });
 
@@ -1824,7 +2189,8 @@ async function runFullPipeline(slug: string): Promise<void> {
 
   const stageA = await Promise.allSettled([
     runAnalyzeStep(slug),
-    runThumbnailStep(slug),
+    // Thumbnail gen is also image spend — skip with skipImages (PiP has og/page art)
+    opts.skipImages ? Promise.resolve() : runThumbnailStep(slug),
     runTtsJobStaged(slug),
   ]);
   logStageOutcomes('stageA', slug, ['analyze', 'thumbnail', 'tts'], stageA);
@@ -1832,17 +2198,27 @@ async function runFullPipeline(slug: string): Promise<void> {
   // Chapter timing is a local quote-match against word timings — no API call.
   await runChapterTimingStep(slug);
 
-  const stageC = await Promise.allSettled([
-    runChapterImagesJobStaged(slug),
-  ]);
-  logStageOutcomes('stageC', slug, ['chapter-images'], stageC);
+  if (!opts.skipImages) {
+    const stageC = await Promise.allSettled([
+      runChapterImagesJobStaged(slug),
+    ]);
+    logStageOutcomes('stageC', slug, ['chapter-images'], stageC);
+  } else {
+    await db.updateGuideJob(slug, 'chapter-images', {
+      status: 'done',
+      ms: 0,
+      finishedAt: Date.now(),
+      skipped: true,
+      reason: 'skipImages',
+    }).catch(() => {});
+  }
 
   await db.updateGuideJob(slug, 'pipeline', {
     status: 'done',
     ms: Date.now() - pipeT0,
     finishedAt: Date.now(),
   });
-  logger.info('Pipeline complete', { slug, ms: Date.now() - pipeT0 });
+  logger.info('Pipeline complete', { slug, ms: Date.now() - pipeT0, skipImages: !!opts.skipImages });
 }
 
 function logStageOutcomes(stage: string, slug: string, names: string[], settled: PromiseSettledResult<unknown>[]): void {
@@ -2014,13 +2390,20 @@ app.post("/api/guides", async (c) => {
     if (!title) return c.json({ error: "Title required" }, 400);
     if (title.length > 200) return c.json({ error: "Title too long" }, 400);
 
-    const slug = (typeof body.slug === 'string' && body.slug.trim()) || slugify(title);
-    if (!slug || !SLUG_REGEX.test(slug)) {
+    const explicitSlug = typeof body.slug === 'string' ? body.slug.trim() : '';
+    const baseSlug = explicitSlug || slugify(title);
+    if (!baseSlug || !SLUG_REGEX.test(baseSlug)) {
       return c.json({ error: "Invalid slug — use lowercase letters, numbers, and dashes" }, 400);
     }
 
-    const existing = await db.getGuide(slug);
-    if (existing) return c.json({ error: "A guide with this slug already exists", slug }, 409);
+    // Explicit slug still 409s (caller asked for that id). Auto slugs get -2, -3, …
+    let slug = baseSlug;
+    if (explicitSlug) {
+      const existing = await db.getGuide(slug);
+      if (existing) return c.json({ error: "A guide with this slug already exists", slug }, 409);
+    } else {
+      slug = await allocateUniqueSlug(baseSlug);
+    }
 
     await db.upsertGuide({
       slug,
@@ -2041,8 +2424,11 @@ app.post("/api/guides", async (c) => {
 
     logger.info('Guide created', { slug });
 
+    // Extension PiP sets skipImages to use blog photos instead of Grok art.
+    const skipImages = body.skipImages === true;
+
     // Backend orchestrates the rest. Fire-and-forget — FE polls GET /api/guides/:slug.
-    runFullPipeline(slug).catch(err => {
+    runFullPipeline(slug, { skipImages }).catch(err => {
       logger.error('Pipeline crashed', { slug, error: (err as Error).message });
     });
 

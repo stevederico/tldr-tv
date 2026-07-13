@@ -7,6 +7,10 @@ import {
   resolveAsset,
   findChapterIndex,
   timeAtWordIndex,
+  isGuidePlayable,
+  isGuideBuilding,
+  hasRunningGuideJobs,
+  guideBuildError,
 } from '../utils/playerUtils';
 import type { Guide, Chapter } from '../utils/playerUtils';
 import { useTranscript } from '../hooks/useTranscript';
@@ -25,6 +29,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@stevederico/skateboard-ui/shadcn/ui/sheet';
+import { Skeleton } from '@stevederico/skateboard-ui/shadcn/ui/skeleton';
+import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
+import { Button } from '@stevederico/skateboard-ui/shadcn/ui/button';
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from '@stevederico/skateboard-ui/shadcn/ui/empty';
+import CircleAlert from '@stevederico/skateboard-ui/icons/CircleAlert';
 
 /** Transient play/pause feedback flash overlay state. */
 interface Feedback {
@@ -79,17 +94,101 @@ const TRANSCRIPT_SIZE_CLS: Record<TranscriptSize, string> = {
 };
 
 /**
+ * Skeleton shell shown while the guide JSON is loading (avoids a white flash).
+ *
+ * @returns Placeholder player layout
+ */
+function PlayerSkeleton() {
+  return (
+    <div className="max-w-full" aria-busy="true" aria-label="Loading player">
+      <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-muted">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+          <Spinner className="size-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Loading guide…</p>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-2">
+          <Skeleton className="h-1.5 w-full rounded-full" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="size-10 rounded-full" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16 ml-auto" />
+          </div>
+        </div>
+      </div>
+      <div className="p-4 flex flex-col gap-3">
+        <Skeleton className="h-6 w-2/3" />
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shown while TTS/images pipeline is still running after create/Watch.
+ *
+ * @param props - Guide + poll hook
+ * @returns Preparing UI with progress
+ */
+function PlayerPreparing({
+  slug,
+  guide,
+  onRefresh,
+}: {
+  slug: string;
+  guide: Guide;
+  onRefresh: () => Promise<Guide | null>;
+}) {
+  const thumb = resolveAsset(guide.thumbnail);
+  const tts = guide.jobs?.tts;
+  const stepHint =
+    tts?.status === 'running'
+      ? `Generating audio${tts.chunksTotal ? ` (${tts.chunksDone ?? 0}/${tts.chunksTotal})` : '…'}`
+      : guide.jobs?.['chapter-images']?.status === 'running'
+        ? 'Generating chapter images…'
+        : guide.jobs?.analyze?.status === 'running'
+          ? 'Analyzing article…'
+          : 'Preparing your guide…';
+
+  return (
+    <div className="max-w-full" aria-busy="true" aria-live="polite">
+      <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-black">
+        {thumb ? (
+          <img
+            src={thumb}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover opacity-40"
+          />
+        ) : null}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center bg-black/50">
+          <Spinner className="size-8 text-white" />
+          <p className="text-base font-medium text-white text-balance">{guide.title}</p>
+          <p className="text-sm text-white/80">{stepHint}</p>
+          <p className="text-xs text-white/60">
+            Playback starts when audio is ready (usually under a minute).
+          </p>
+        </div>
+      </div>
+      <div className="p-4 border-b border-border">
+        <GuideProgress slug={slug} guide={guide} onRefresh={() => { void onRefresh(); }} />
+      </div>
+    </div>
+  );
+}
+
+/**
  * Full audiobook-style player: hero image, scrubbable timeline, captions,
  * split transcript, chapters menu, settings, and note-taking.
  *
  * @component
- * @returns The player view, or null until the guide loads.
+ * @returns The player view, skeleton while loading, or preparing UI while the pipeline runs.
  */
 export default function PlayerView() {
   const { slug = 'the-brand-age' } = useParams();
   const [searchParams] = useSearchParams();
   const debugMode = searchParams.get('debug') === '1';
   const [guide, setGuide] = useState<Guide | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -329,8 +428,10 @@ export default function PlayerView() {
     try {
       const r = await fetch(`/api/guides/${encodeURIComponent(slug)}`);
       if (!r.ok) return null;
-      const g = await r.json();
+      const g = (await r.json()) as Guide;
       setGuide(g);
+      if (g.duration) setDuration(g.duration);
+      setLoadError(null);
       return g;
     } catch (err) {
       console.error('Failed to refetch guide:', err);
@@ -338,12 +439,19 @@ export default function PlayerView() {
     }
   }, [slug]);
 
+  // Initial load + reset when navigating between guides
   useEffect(() => {
     let cancelled = false;
     const previousTitle = document.title;
+    setGuide(null);
+    setLoadError(null);
+    setDuration(0);
+    setCurrent(0);
+    setPlaying(false);
+
     fetch(`/api/guides/${encodeURIComponent(slug)}`)
       .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) throw new Error(r.status === 404 ? 'Guide not found' : `Failed to load (HTTP ${r.status})`);
         return r.json();
       })
       .then((g: Guide) => {
@@ -355,12 +463,32 @@ export default function PlayerView() {
       .catch(err => {
         if (cancelled) return;
         console.error('Failed to load guide:', err);
+        setLoadError(err instanceof Error ? err.message : String(err));
       });
     return () => {
       cancelled = true;
       document.title = previousTitle;
     };
   }, [slug]);
+
+  // Poll while any job runs — audio can be ready before chapter images land
+  useEffect(() => {
+    if (!guide) return;
+    const needsPoll =
+      isGuideBuilding(guide) ||
+      hasRunningGuideJobs(guide) ||
+      // Playable but chapters still missing generated images (stale mid-pipeline open)
+      (isGuidePlayable(guide) &&
+        (guide.chapters?.length ?? 0) > 0 &&
+        guide.chapters!.some((c) => !c.image?.generated) &&
+        guide.jobs?.['chapter-images']?.status !== 'failed' &&
+        guide.jobs?.pipeline?.status !== 'done');
+    if (!needsPoll) return;
+    const id = setInterval(() => {
+      void refetchGuide();
+    }, 2000);
+    return () => clearInterval(id);
+  }, [guide, refetchGuide]);
 
   const {
     transcriptParas,
@@ -688,7 +816,53 @@ export default function PlayerView() {
     document.addEventListener('pointercancel', onUp, { passive: true });
   }
 
-  if (!guide) return null;
+  if (!guide && loadError) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><CircleAlert size={24} /></EmptyMedia>
+            <EmptyTitle>Couldn&apos;t open guide</EmptyTitle>
+            <EmptyDescription>{loadError}</EmptyDescription>
+          </EmptyHeader>
+          <Button type="button" onClick={() => { void refetchGuide(); setLoadError(null); }}>
+            Try again
+          </Button>
+        </Empty>
+      </div>
+    );
+  }
+
+  if (!guide) return <PlayerSkeleton />;
+
+  const buildErr = guideBuildError(guide);
+  if (buildErr) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><CircleAlert size={24} /></EmptyMedia>
+            <EmptyTitle>Generation failed</EmptyTitle>
+            <EmptyDescription>{buildErr}</EmptyDescription>
+          </EmptyHeader>
+          <Button type="button" onClick={() => { void refetchGuide(); }}>
+            Check again
+          </Button>
+        </Empty>
+      </div>
+    );
+  }
+
+  if (!isGuidePlayable(guide)) {
+    return (
+      <PlayerPreparing
+        slug={slug}
+        guide={guide}
+        onRefresh={refetchGuide}
+      />
+    );
+  }
+
   const ch = chapters[activeIdx] || chapters[0] || {};
   // Chapters can have a generated image, a real image, or both. When both are
   // present, rotate between them every IMAGE_SWAP_SECONDS so the visual changes
@@ -703,7 +877,11 @@ export default function PlayerView() {
   const heroIdx = chapterImages.length > 0
     ? Math.floor(secondsInChapter / IMAGE_SWAP_SECONDS) % chapterImages.length
     : 0;
-  const heroSrc = resolveAsset(chapterImages[heroIdx] || '');
+  // Prefer chapter art; fall back to og/cover thumbnail so hero isn't pure black
+  // while images generate or if a chapter is missing a file.
+  const heroSrc = resolveAsset(
+    chapterImages[heroIdx] || guide.thumbnail || ''
+  );
   // Force split off on mobile — the side transcript pane is desktop-only;
   // mobile gets the full-width transcript tab in PlayerInfoPanel instead.
   const showSplit = splitTranscript && !!transcriptParas && !isMobile;
@@ -992,7 +1170,7 @@ export default function PlayerView() {
 
           <audio
             ref={audioRef}
-            src={`${resolveAsset(guide.audio)}${guide.updatedAt ? `?v=${guide.updatedAt}` : ''}`}
+            src={guide.audio ? `${resolveAsset(guide.audio)}${guide.updatedAt ? `?v=${guide.updatedAt}` : ''}` : undefined}
             style={{ display: 'none' }}
             onPlay={() => setPlaying(true)}
             onPause={() => {

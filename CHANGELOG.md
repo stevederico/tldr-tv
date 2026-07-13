@@ -6,6 +6,58 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.83.1
+
+  Fix stream popping
+  Gapless stream encode
+
+0.83.0
+
+  Stream caption timings
+  Live streaming captions
+
+0.82.3
+
+  Add play flash
+  Consolidate loading lines
+
+0.82.2
+
+  Hide stream duration
+  Move link icon
+
+0.82.1
+
+  Fix frozen captions
+
+0.82.0
+
+  Stream TTS audio
+  Fast playback start
+
+0.81.0
+
+  Add PiP captions
+  Highlight words PiP
+  Fix PiP progress
+  Add PiP spinner
+
+0.80.1
+
+  Fix PiP audio
+
+0.81.0
+
+  Add auto-gen publisher todo
+
+0.80.0
+
+  Expand competitor research
+
+0.79.0
+
+  Add competitor research
+
 0.78.0
 
   Prioritize open todos

@@ -87,6 +87,8 @@ const {
   tokenExpireTimestamp,
   config,
   shouldStartServer,
+  __testStreamTailNext,
+  __testShouldMergeStreamTiming,
 } = await import('./server.ts');
 
 // server.ts runs loadLocalENV() at import, which loads the app's backend/.env and can
@@ -1508,5 +1510,58 @@ describe('server registration hooks', () => {
     const client = __testInitializeStripe('sk_test_initialize');
     assert.ok(client);
     assert.equal(typeof client.webhooks, 'object');
+  });
+});
+
+describe('__testStreamTailNext (progressive stream tail loop)', () => {
+  const running = { chunksTotal: 5, chunksDone: 2, done: false, failed: false };
+
+  it('writes when the file has grown past the sent offset', () => {
+    assert.equal(__testStreamTailNext(1000, 4096, running), 'write');
+  });
+
+  it('waits when no new bytes yet but the render is still running', () => {
+    assert.equal(__testStreamTailNext(4096, 4096, running), 'wait');
+  });
+
+  it('ends when the state file is gone', () => {
+    assert.equal(__testStreamTailNext(0, 0, null), 'end');
+  });
+
+  it('flushes pending bytes even on failure, then ends once drained', () => {
+    assert.equal(__testStreamTailNext(0, 2048, { ...running, failed: true }), 'write');
+    assert.equal(__testStreamTailNext(2048, 2048, { ...running, failed: true }), 'end');
+  });
+
+  it('ends when done and all bytes have been drained', () => {
+    assert.equal(__testStreamTailNext(8192, 8192, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'end');
+  });
+
+  it('still flushes trailing bytes after done before ending', () => {
+    // done=true but the consumer is behind (offset < size): keep going.
+    assert.equal(__testStreamTailNext(4096, 8192, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
+  });
+});
+
+describe('__testShouldMergeStreamTiming (live-caption sidecar merge)', () => {
+  const partial = { words: [{ w: 'The', t: 0.3 }], transcript: 'The Orioles…' };
+  const running = { jobs: { tts: { status: 'running' } }, timing: null };
+
+  it('merges partial timing while rendering and no final timing exists', () => {
+    assert.equal(__testShouldMergeStreamTiming(running, partial), true);
+  });
+
+  it('does not merge once the final timing is present', () => {
+    const done = { jobs: { tts: { status: 'done' } }, timing: { words: [{ w: 'The', t: 0.3 }] } };
+    assert.equal(__testShouldMergeStreamTiming(done, partial), false);
+  });
+
+  it('does not merge when TTS is not running', () => {
+    assert.equal(__testShouldMergeStreamTiming({ jobs: { tts: { status: 'failed' } }, timing: null }, partial), false);
+  });
+
+  it('does not merge when the sidecar is missing or empty', () => {
+    assert.equal(__testShouldMergeStreamTiming(running, null), false);
+    assert.equal(__testShouldMergeStreamTiming(running, { words: [], transcript: '' }), false);
   });
 });

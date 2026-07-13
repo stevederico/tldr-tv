@@ -207,14 +207,21 @@ export function silenceWav(durationSec, sampleRate = SAMPLE_RATE) {
  * GitHub's 100MB per-file limit.
  *
  * @param {Buffer} wavBuf - WAV file bytes
+ * @param {Object} [opts]
+ * @param {boolean} [opts.xing=true] - Write the Xing/LAME info header frame.
+ *   Pass `false` for per-chunk encodes that get concatenated into a live
+ *   stream: each Xing frame decodes to a near-silent frame, so dropping it on
+ *   every chunk but the first avoids repeated header frames mid-stream (fewer
+ *   seam artifacts). The canonical single-shot encode keeps it (default).
  * @returns {Promise<Buffer>} MP3 file bytes
  */
-export function wavToMp3(wavBuf) {
+export function wavToMp3(wavBuf, { xing = true } = {}) {
   return new Promise((resolve, reject) => {
     const ff = spawn('ffmpeg', [
       '-loglevel', 'error',
       '-f', 'wav', '-i', 'pipe:0',
       '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
+      ...(xing ? [] : ['-write_xing', '0']),
       '-f', 'mp3', 'pipe:1',
     ]);
     const out = [];
