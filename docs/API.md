@@ -325,6 +325,12 @@ Multipart upload. Stores the file at `backend/public/audio/<slug>.mp3` and updat
 
 ---
 
+> **Live captions during streaming:** while TTS is rendering, `GET /api/guides/:slug`
+> merges the streaming timing sidecar (`<slug>.parts/timing.json` — cumulative
+> per-word timings + normalized transcript) into the response, so the PiP can
+> show word-synced captions for the portion already rendered. Once TTS finishes,
+> the DB row's canonical `timing`/`transcript` are returned instead.
+
 #### GET /api/guides/:slug/stream.mp3
 Progressive audio for fast playback start. While TTS is still rendering, the
 background job writes each chunk's MP3 to `<slug>.parts/` as it completes; this

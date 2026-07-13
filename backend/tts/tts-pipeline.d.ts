@@ -21,6 +21,10 @@ export interface TtsChunkMeta {
   chunksDone: number;
   /** Total chunks to synthesize. */
   chunksTotal: number;
+  /** Cumulative per-word timings for everything rendered so far. */
+  words: WordTiming[];
+  /** Normalized transcript fed to the TTS (stable across chunks). */
+  transcript: string;
 }
 
 /** Normalize text for TTS (expand abbreviations, strip markup, etc.). */

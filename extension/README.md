@@ -39,7 +39,7 @@ Add matching `host_permissions` in `manifest.json` for non-local hosts.
 - **Create** — same payload shape as the library Create modal
 - **PiP (default)** — large resizable floating player on the blog (YouTube-style chrome)
 - **Blog images first** — page/og images while Grok art generates; then both rotate
-- **Captions + word highlight** — karaoke-style captions synced to the audio; toggle both in the settings (gear) menu, persisted in `localStorage` (`pip.cc` / `pip.hl`). Word timings only exist once TTS finishes, so captions appear when the render completes (they stay hidden, not frozen, while still streaming)
+- **Captions + word highlight** — karaoke-style captions synced to the audio, live even while streaming: the backend streams per-chunk word timings alongside the audio, so captions track the rendered portion as it plays. Toggle both in the settings (gear) menu, persisted in `localStorage` (`pip.cc` / `pip.hl`)
 - **Preparing state** — animated spinner + progress bar (analyze + TTS, summed so it never sticks)
 - **Streaming start** — plays `GET /api/guides/:slug/stream.mp3` as soon as the first TTS chunk renders (~1-2s), instead of waiting for the full audio; falls back to the canonical file once it exists
 - **Autoplay** when audio is ready

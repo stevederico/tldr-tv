@@ -83,10 +83,9 @@ let timingOffset = 0;
 // Guide's real audio duration once known (from the payload). The live stream's
 // <audio>.duration is Infinity, so we fall back to this for the timeline total.
 let knownDuration = 0;
-/** Transcript parsed into paragraphs/chunks (done once). */
-let transcriptParsed = false;
-/** Real per-word timings aligned (done once timing arrives — may lag transcript). */
-let timingAligned = false;
+/** Last transcript string parsed — re-parse when it changes (streaming swaps
+ *  the raw transcript for the normalized one once timings start arriving). */
+let lastTranscript = '';
 let captionsOn = safeGet('pip.cc') !== '0';
 let highlightOn = safeGet('pip.hl') !== '0';
 let lastCaptionKey = '';
@@ -226,43 +225,46 @@ function buildProgress(jobs) {
 /**
  * Parse transcript + timing into caption chunks and per-word start times.
  *
- * Runs on every guide poll but does the two halves independently: the
- * transcript is parsed once (as soon as it's present), while the per-word
- * timing alignment keeps retrying until real timings arrive. Streaming opens
- * playback before TTS finishes, so the transcript is available well before
- * `timing` — latching both together would leave captions frozen at word 0
- * forever (the timing that lands later would be ignored).
+ * Runs on every guide poll. Two independent halves:
+ *  1. Re-parse the transcript whenever the string changes. During streaming the
+ *     backend serves the raw transcript first, then swaps in the normalized one
+ *     (matching the timing tokens) once the first chunk's timings are ready.
+ *  2. Re-align timings every poll from `g.timing` — which is the *partial*
+ *     streamed timing mid-render and the full set once TTS finishes. This lets
+ *     captions track the audio live as more words stream in.
  *
  * @param {Record<string, unknown>} g - Guide payload.
  */
 function buildTranscriptData(g) {
   const transcript = typeof g.transcript === 'string' ? g.transcript : '';
-  if (!transcriptParsed && transcript) {
+  if (transcript && transcript !== lastTranscript) {
+    lastTranscript = transcript;
     transcriptParas = parseTranscript(transcript);
     totalWords = transcriptParas.reduce((n, p) => n + p.words.length, 0);
     captionChunks = buildCaptionChunks(transcriptParas);
     timingOffset = Number(g.timingOffset) || 0;
-    transcriptParsed = true;
+    // New tokenization — drop stale alignment so it re-aligns below.
+    wordStartTimes = null;
+    anchors = null;
   }
 
-  if (transcriptParsed && !timingAligned && transcriptParas) {
-    const t = g.timing;
-    const timingWords = Array.isArray(t)
-      ? t
-      : t && typeof t === 'object' && Array.isArray(/** @type {{ words?: unknown[] }} */ (t).words)
-        ? /** @type {import('./transcript.js').TimingWord[]} */ (/** @type {{ words: unknown[] }} */ (t).words)
-        : null;
-    const aligned = alignTimings(transcriptParas, timingWords);
-    if (aligned) {
-      wordStartTimes = aligned;
-      timingAligned = true;
-    } else {
-      // No word timings yet. Interpolate from chapter quotes if the guide is
-      // already playable (duration + chapters known); otherwise leave captions
-      // hidden until real timings land rather than freezing on word 0.
-      const chapters = Array.isArray(g.chapters) ? /** @type {Array<{ time?: number, quote?: string }>} */ (g.chapters) : undefined;
-      anchors = buildAnchors(transcriptParas, chapters, Number(g.duration) || 0);
-    }
+  if (!transcriptParas) return;
+
+  const t = g.timing;
+  const timingWords = Array.isArray(t)
+    ? t
+    : t && typeof t === 'object' && Array.isArray(/** @type {{ words?: unknown[] }} */ (t).words)
+      ? /** @type {import('./transcript.js').TimingWord[]} */ (/** @type {{ words: unknown[] }} */ (t).words)
+      : null;
+  const aligned = alignTimings(transcriptParas, timingWords);
+  if (aligned) {
+    // Partial or full per-word times — best available, refreshed each poll.
+    wordStartTimes = aligned;
+  } else if (!wordStartTimes) {
+    // No word timings yet. Interpolate from chapter quotes if the guide is
+    // already playable; otherwise leave captions hidden rather than freezing.
+    const chapters = Array.isArray(g.chapters) ? /** @type {Array<{ time?: number, quote?: string }>} */ (g.chapters) : undefined;
+    anchors = buildAnchors(transcriptParas, chapters, Number(g.duration) || 0);
   }
 }
 

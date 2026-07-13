@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.83.0
+
+  Stream caption timings
+  Live streaming captions
+
 0.82.3
 
   Add play flash

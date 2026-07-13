@@ -316,7 +316,9 @@ export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 
         try {
           const chunkWav = concatWav(chunkWavs, KOKORO_SAMPLE_RATE, { fadeMs: 0 });
           const chunkMp3 = await wavToMp3(chunkWav, { xing: false });
-          await onChunk(chunkMp3, { index: i, chunksDone: done, chunksTotal });
+          // Pass the cumulative word timings + the normalized transcript so the
+          // caller can stream captions for the portion rendered so far.
+          await onChunk(chunkMp3, { index: i, chunksDone: done, chunksTotal, words: words.slice(), transcript: normalized });
         } catch (err) {
           console.error(`[tts] onChunk failed for chunk ${i}:`, err instanceof Error ? err.message : err);
         }

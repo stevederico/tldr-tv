@@ -88,6 +88,7 @@ const {
   config,
   shouldStartServer,
   __testTtsStreamNext,
+  __testShouldMergeStreamTiming,
 } = await import('./server.ts');
 
 // server.ts runs loadLocalENV() at import, which loads the app's backend/.env and can
@@ -1539,5 +1540,28 @@ describe('__testTtsStreamNext (progressive TTS stream loop)', () => {
     // done=true but the consumer is behind (idx < chunksDone): keep going.
     assert.equal(__testTtsStreamNext(2, false, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'wait');
     assert.equal(__testTtsStreamNext(2, true, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
+  });
+});
+
+describe('__testShouldMergeStreamTiming (live-caption sidecar merge)', () => {
+  const partial = { words: [{ w: 'The', t: 0.3 }], transcript: 'The Orioles…' };
+  const running = { jobs: { tts: { status: 'running' } }, timing: null };
+
+  it('merges partial timing while rendering and no final timing exists', () => {
+    assert.equal(__testShouldMergeStreamTiming(running, partial), true);
+  });
+
+  it('does not merge once the final timing is present', () => {
+    const done = { jobs: { tts: { status: 'done' } }, timing: { words: [{ w: 'The', t: 0.3 }] } };
+    assert.equal(__testShouldMergeStreamTiming(done, partial), false);
+  });
+
+  it('does not merge when TTS is not running', () => {
+    assert.equal(__testShouldMergeStreamTiming({ jobs: { tts: { status: 'failed' } }, timing: null }, partial), false);
+  });
+
+  it('does not merge when the sidecar is missing or empty', () => {
+    assert.equal(__testShouldMergeStreamTiming(running, null), false);
+    assert.equal(__testShouldMergeStreamTiming(running, { words: [], transcript: '' }), false);
   });
 });

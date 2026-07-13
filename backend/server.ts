@@ -1300,6 +1300,15 @@ app.get("/api/guides/:slug", async (c) => {
     if (guide.visibility && guide.visibility !== 'public') {
       return c.json({ error: "Guide not found" }, 404);
     }
+    // While TTS is still rendering, the DB row has no timing yet. Merge the
+    // streaming sidecar (partial word timings + normalized transcript) so the
+    // PiP can show live captions for the portion already rendered. Doesn't touch
+    // the DB — the final upsert writes the canonical transcript/timing.
+    const partsDir = ttsPartsDir(resolve(__dirname, './public/audio'), slug);
+    const partial = readTtsTiming(partsDir);
+    if (__testShouldMergeStreamTiming(guide, partial)) {
+      return c.json({ ...guide, transcript: partial.transcript, timing: { words: partial.words } });
+    }
     return c.json(guide);
   } catch (e) {
     logger.error('Get guide error', { error: (e as Error).message, slug: c.req.param('slug') });
@@ -1598,6 +1607,52 @@ function writeTtsState(partsDir: string, state: TtsStreamState): void {
   }
 }
 
+/**
+ * Whether a guide GET should merge the streaming partial-timing sidecar into
+ * the response: only while TTS is still running, the DB row has no final timing,
+ * and the sidecar actually has words. Extracted for unit testing.
+ *
+ * @param guide - The DB guide row
+ * @param partial - The parsed sidecar timing, or null
+ * @returns True when the partial timing should be merged in
+ */
+export function __testShouldMergeStreamTiming(
+  guide: Guide,
+  partial: TtsStreamTiming | null
+): partial is TtsStreamTiming {
+  const hasFinalTiming = Array.isArray(guide.timing?.words) && guide.timing.words.length > 0;
+  return !hasFinalTiming && guide.jobs?.tts?.status === 'running' && !!partial && partial.words.length > 0;
+}
+
+/** Partial timing streamed alongside audio chunks (for live captions). */
+interface TtsStreamTiming {
+  /** Cumulative per-word timings for the portion rendered so far. */
+  words: Array<{ w: string; t: number }>;
+  /** Normalized transcript the timings tokenize against. */
+  transcript: string;
+}
+
+/** Write the streaming partial-timing sidecar (best-effort, never throws). */
+function writeTtsTiming(partsDir: string, timing: TtsStreamTiming): void {
+  try {
+    writeFileSync(resolve(partsDir, 'timing.json'), JSON.stringify(timing));
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Read the streaming partial-timing sidecar, or null when absent/corrupt. */
+function readTtsTiming(partsDir: string): TtsStreamTiming | null {
+  try {
+    const raw = readFileSync(resolve(partsDir, 'timing.json'), 'utf8');
+    const t = JSON.parse(raw) as Partial<TtsStreamTiming>;
+    if (!Array.isArray(t.words) || typeof t.transcript !== 'string') return null;
+    return { words: t.words, transcript: t.transcript };
+  } catch {
+    return null;
+  }
+}
+
 /** Read the streaming state file, or null when absent/corrupt. */
 function readTtsState(partsDir: string): TtsStreamState | null {
   try {
@@ -1644,10 +1699,13 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
         // Best-effort progress write — errors here shouldn't kill the job.
         db.updateGuideJob(slug, 'tts', { chunksDone, chunksTotal }).catch(() => {});
       },
-      onChunk: (mp3, { index, chunksTotal }) => {
+      onChunk: (mp3, { index, chunksTotal, words, transcript: normalized }) => {
         // Write this chunk's standalone MP3 so streaming clients can play it
         // immediately. Sequential + awaited in the pipeline, so no races here.
         writeFileSync(ttsPartPath(partsDir, index), mp3);
+        // Sidecar: cumulative word timings + normalized transcript so the
+        // player can render captions for the portion rendered so far.
+        writeTtsTiming(partsDir, { words, transcript: normalized });
         state.chunksTotal = chunksTotal;
         state.chunksDone = index + 1;
         writeTtsState(partsDir, state);
