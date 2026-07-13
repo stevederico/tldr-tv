@@ -104,7 +104,7 @@ function PlayerSkeleton() {
       <div className="relative w-full aspect-video max-h-[75vh] overflow-hidden m-0 bg-muted">
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <Spinner className="size-8 text-muted-foreground" />
-          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Loading guide</p>
+          <p className="font-[family-name:var(--font-mono)] text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Loading video</p>
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4 flex flex-col gap-2">
           <Skeleton className="h-1.5 w-full rounded-full" />
@@ -148,7 +148,7 @@ function PlayerPreparing({
         ? 'Generating chapter images…'
         : guide.jobs?.analyze?.status === 'running'
           ? 'Analyzing article…'
-          : 'Preparing your guide…';
+          : 'Preparing your video…';
 
   return (
     <div className="player-accent-red max-w-full" aria-busy="true" aria-live="polite">
@@ -822,7 +822,7 @@ export default function PlayerView() {
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon"><CircleAlert size={24} /></EmptyMedia>
-            <EmptyTitle>Couldn&apos;t open guide</EmptyTitle>
+            <EmptyTitle>Couldn&apos;t open video</EmptyTitle>
             <EmptyDescription>{loadError}</EmptyDescription>
           </EmptyHeader>
           <Button type="button" onClick={() => { void refetchGuide(); setLoadError(null); }}>

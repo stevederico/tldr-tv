@@ -54,18 +54,28 @@ function fmtDuration(sec: number | undefined): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+/**
+ * Normalize a stored date (raw ISO like `2026-07-13T13:35:12-05:00`, or free
+ * text like `June 2026`) to one consistent card label: `MMM D, YYYY` when it
+ * parses, else the trimmed original. Keeps the grid from showing a mix of raw
+ * timestamps and prose.
+ *
+ * @param raw - Stored date string.
+ * @returns Formatted date, or '' for empty input.
+ */
+function fmtDate(raw: string | undefined): string {
+  if (!raw) return '';
+  const t = Date.parse(raw);
+  if (Number.isNaN(t)) return raw.trim();
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 const THUMB_PREFIX_RX = /^\.\.\//;
-const WHITESPACE_RX = /\s+/;
 
 /** Resolve a stored thumbnail path (`../x` -> `/x`) for browser use. */
 function resolveThumb(p: string | undefined): string {
   if (!p) return '';
   return p.replace(THUMB_PREFIX_RX, '/');
-}
-
-/** Build up-to-two-letter uppercase initials from a name. */
-function initials(name: string | undefined): string {
-  return (name || '?').split(WHITESPACE_RX).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
 }
 
 /**
@@ -89,7 +99,7 @@ export default function LibraryView() {
   // Data collected from URL or pasted text
   const [sourceData, setSourceData] = useState<SourceData>({ title: '', author: '', transcript: '' });
   const [submitting, setSubmitting] = useState(false);
-  const [submitLabel, setSubmitLabel] = useState('Create guide');
+  const [submitLabel, setSubmitLabel] = useState('Create video');
 
   // After create, the modal flips into "progress" mode showing the GuideProgress stepper
   // so the user can kick off the remaining enrichment jobs (TTS, chapters, images, etc.)
@@ -129,7 +139,7 @@ export default function LibraryView() {
     } catch (err) {
       console.error('Delete guide failed', err);
       setGuides(prev);
-      toast.error((err instanceof Error ? err.message : String(err)) || 'Could not delete that guide.');
+      toast.error((err instanceof Error ? err.message : String(err)) || 'Could not delete that video.');
     } finally {
       setDeletingSlug(null);
     }
@@ -175,7 +185,7 @@ export default function LibraryView() {
       return;
     }
     setSourceData(d => {
-      const firstLine = pastedText.split('\n').find(l => l.trim().length > 12) || 'Untitled Guide';
+      const firstLine = pastedText.split('\n').find(l => l.trim().length > 12) || 'Untitled Video';
       const derivedTitle = firstLine.trim().slice(0, 140);
       // Preserve any title the user has edited (different from the previously-derived value)
       const title = d.title && d.title !== d._derivedTitle ? d.title : derivedTitle;
@@ -198,7 +208,7 @@ export default function LibraryView() {
     setFetching(false);
     setSourceData({ title: '', author: '', transcript: '' });
     setCreatedGuide(null);
-    setSubmitLabel('Create guide');
+    setSubmitLabel('Create video');
   }
 
   // Refetch the full guide payload so the GuideProgress component sees newly-produced
@@ -248,7 +258,7 @@ export default function LibraryView() {
     }
 
     return {
-      title: json.title || 'Untitled Guide',
+      title: json.title || 'Untitled Video',
       author: json.author || '',
       transcript: json.transcript || '',
       sourceUrl: json.sourceUrl || url.trim(),
@@ -274,7 +284,7 @@ export default function LibraryView() {
 
       // Auto-prepare from pasted text
       if (sourceMode === 'text' && pastedText.trim() && !data.transcript) {
-        const firstLine = pastedText.split('\n').find(l => l.trim().length > 12) || 'Untitled Guide';
+        const firstLine = pastedText.split('\n').find(l => l.trim().length > 12) || 'Untitled Video';
         data = {
           title: firstLine.trim().slice(0, 140),
           author: '',
@@ -290,7 +300,7 @@ export default function LibraryView() {
       setSubmitLabel('Creating…');
 
       const metadata = {
-        title: data.title || 'Untitled Guide',
+        title: data.title || 'Untitled Video',
         author: data.author || null,
         transcript: data.transcript,
         sourceUrl: data.sourceUrl || (sourceMode === 'url' ? sourceUrl.trim() : null),
@@ -317,7 +327,7 @@ export default function LibraryView() {
     } catch (err) {
       console.error('Create guide failed', err);
       toast.error((err instanceof Error ? err.message : String(err)) || 'Something went wrong');
-      setSubmitLabel('Create guide');
+      setSubmitLabel('Create video');
     } finally {
       setSubmitting(false);
     }
@@ -329,27 +339,27 @@ export default function LibraryView() {
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="relative inline-flex size-[26px] items-center justify-center rounded-[7px] bg-[var(--brand)] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_6px_20px_rgba(var(--brand-glow),0.35)]"
+            className="relative inline-flex size-[26px] items-center justify-center rounded-[2px] bg-[var(--brand)]"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
               <line x1="0" y1="14" x2="14" y2="0" stroke="white" strokeWidth="1" />
             </svg>
           </span>
-          <span className="font-['Bricolage_Grotesque'] font-extrabold text-[1.1rem] tracking-[-0.03em]">Watch It</span>
+          <span className="font-[family-name:var(--font-grotesk)] font-extrabold text-[1.1rem] tracking-[-0.03em]">Watch It</span>
         </div>
         <div className="max-w-[560px] w-full sm:justify-self-center col-span-2 sm:col-span-1 sm:col-start-2 row-start-2 sm:row-start-1 order-3 sm:order-none">
           <input
             type="search"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search guides"
-            className="w-full bg-card border border-border text-foreground px-4 py-2.5 rounded-full text-[0.92rem] outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
+            placeholder="Search videos"
+            className="w-full bg-card border border-border text-foreground px-4 py-2.5 rounded-[2px] text-[0.92rem] outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
           />
         </div>
         <button
           onClick={() => { resetCreateForm(); setModalOpen(true); }}
-          aria-label="Create new guide"
-          className="justify-self-end inline-flex items-center gap-2 bg-[var(--brand)] text-white font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer shadow-[0_6px_20px_rgba(var(--brand-glow),0.35)] transition-[transform,box-shadow,background-color] duration-150 hover:bg-[var(--brand-hot)] hover:-translate-y-px hover:shadow-[0_10px_26px_rgba(var(--brand-glow),0.5)] active:translate-y-0"
+          aria-label="Create new video"
+          className="justify-self-end inline-flex items-center gap-2 bg-[var(--brand)] text-white font-[family-name:var(--font-mono)] font-semibold uppercase tracking-wider text-[0.76rem] py-2.5 px-4 rounded-[2px] cursor-pointer transition-colors duration-150 hover:bg-[var(--brand-hot)]"
         >
           <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
           <span className="hidden sm:inline">Create</span>
@@ -358,7 +368,7 @@ export default function LibraryView() {
 
       {filtered.length === 0 ? (
         <div className="py-20 px-7 text-center">
-          <div className="font-['Bricolage_Grotesque'] font-extrabold text-[1.4rem] mb-1.5">No guides yet.</div>
+          <div className="font-[family-name:var(--font-grotesk)] font-extrabold text-[1.4rem] mb-1.5">No videos yet.</div>
           <div className="text-muted-foreground">Tap <strong>Create</strong> to add one.</div>
         </div>
       ) : (
@@ -392,9 +402,9 @@ export default function LibraryView() {
               rel="noopener noreferrer"
               {...cardProps}
               data-processing={processing || undefined}
-              className="group/card bg-transparent border-none p-2.5 -m-2.5 rounded-2xl text-left cursor-pointer text-inherit flex flex-col no-underline transition-colors duration-150 hover:bg-muted data-[processing]:opacity-85 [content-visibility:auto] [contain-intrinsic-size:0_320px]"
+              className="group/card bg-transparent border-none p-2.5 -m-2.5 rounded-[3px] text-left cursor-pointer text-inherit flex flex-col no-underline transition-colors duration-150 hover:bg-muted data-[processing]:opacity-85 [content-visibility:auto] [contain-intrinsic-size:0_320px]"
             >
-              <div className="relative w-full aspect-video bg-gradient-to-br from-muted to-card rounded-xl overflow-hidden transition-[transform,box-shadow] duration-200 group-hover/card:-translate-y-0.5 group-hover/card:shadow-[0_12px_30px_rgba(0,0,0,0.4)] group-data-[processing]/card:pointer-events-none mb-3">
+              <div className="relative w-full aspect-video bg-muted border border-border rounded-[2px] overflow-hidden transition-[transform,box-shadow] duration-200 group-hover/card:-translate-y-0.5 group-hover/card:shadow-[0_12px_30px_rgba(0,0,0,0.4)] group-data-[processing]/card:pointer-events-none mb-3">
                 {g.thumbnail && (
                   <img
                     loading="lazy"
@@ -404,7 +414,7 @@ export default function LibraryView() {
                   />
                 )}
                 {g.duration ? (
-                  <span className="absolute right-2 bottom-2 bg-black/85 text-white tabular-nums text-[0.74rem] font-semibold px-1.5 py-0.5 rounded">
+                  <span className="absolute right-2 bottom-2 bg-black/85 text-white font-[family-name:var(--font-mono)] tabular-nums text-[0.72rem] font-medium px-1.5 py-0.5 rounded-[1px]">
                     {fmtDuration(g.duration)}
                   </span>
                 ) : null}
@@ -435,15 +445,10 @@ export default function LibraryView() {
                   <Trash2 size={16} aria-hidden="true" />
                 </button>
               </div>
-              <h3 className="font-['Bricolage_Grotesque'] font-extrabold text-[1.4rem] tracking-[-0.025em] leading-[1.15] mt-0 mb-1 text-foreground line-clamp-2">{g.title}</h3>
-              <div className="flex gap-2.5 items-start">
-                <div aria-hidden="true" className="size-9 rounded-full bg-gradient-to-br from-[var(--brand)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0">
-                  {initials(g.author)}
-                </div>
-                <div className="min-w-0">
-                  {g.author && <div className="text-[0.82rem] leading-snug font-medium text-foreground mb-0.5 hover:text-[var(--brand-hot)]">{g.author}</div>}
-                  {g.date && <div className="text-[0.82rem] leading-snug font-medium text-muted-foreground">{g.date}</div>}
-                </div>
+              <h3 className="font-[family-name:var(--font-grotesk)] font-bold text-[1.15rem] tracking-[-0.01em] leading-[1.2] mt-0 mb-2 text-foreground line-clamp-2">{g.title}</h3>
+              <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2">
+                {g.author && <span className="font-[family-name:var(--font-mono)] uppercase tracking-wider text-[0.7rem] text-muted-foreground truncate">{g.author}</span>}
+                {g.date && <span className="font-[family-name:var(--font-mono)] tabular-nums text-[0.7rem] text-muted-foreground shrink-0">{fmtDate(g.date)}</span>}
               </div>
             </a>
             );
@@ -461,7 +466,7 @@ export default function LibraryView() {
         >
           <form autoComplete="off" onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 max-sm:h-full">
             <DialogHeader className="flex-row items-center justify-between py-4 px-5 border-b border-border gap-0">
-              <DialogTitle className="font-['Bricolage_Grotesque'] font-extrabold text-[1.15rem] tracking-[-0.02em] m-0">
+              <DialogTitle className="font-[family-name:var(--font-grotesk)] font-extrabold text-[1.15rem] tracking-[-0.02em] m-0">
                 {createdGuide ? 'Guide created' : 'New guide'}
               </DialogTitle>
               <button
@@ -579,8 +584,8 @@ export default function LibraryView() {
           className="bg-card border-border p-0 gap-0 overflow-hidden sm:max-w-[460px] sm:rounded-2xl"
         >
           <DialogHeader className="flex-row items-center justify-between py-4 px-5 border-b border-border gap-0">
-            <DialogTitle className="font-['Bricolage_Grotesque'] font-extrabold text-[1.15rem] tracking-[-0.02em] m-0">
-              Delete guide?
+            <DialogTitle className="font-[family-name:var(--font-grotesk)] font-extrabold text-[1.15rem] tracking-[-0.02em] m-0">
+              Delete video?
             </DialogTitle>
             <button
               type="button"

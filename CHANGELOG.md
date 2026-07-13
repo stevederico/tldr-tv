@@ -6,6 +6,13 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.105.0
+
+  Swiss grid restyle
+  Format card dates
+  Drop button glows
+  Rename guides videos
+
 0.104.0
 
   Restore library grid

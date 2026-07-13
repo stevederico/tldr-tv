@@ -119,7 +119,7 @@ export default function PlayerInfoPanel({
           {guide?.summary ? (
             <p className="text-[1.02rem] leading-[1.7] text-foreground m-0 tracking-[-0.005em] text-pretty">{guide.summary}</p>
           ) : (
-            <div className="text-muted-foreground text-[0.95rem] py-2">No summary available for this guide yet.</div>
+            <div className="text-muted-foreground text-[0.95rem] py-2">No summary available for this video yet.</div>
           )}
         </div>
       )}
@@ -130,7 +130,7 @@ export default function PlayerInfoPanel({
             placeholder="Write your notes here…"
             value={notes}
             onChange={e => updateNotes(e.target.value)}
-            aria-label="Notes for this guide"
+            aria-label="Notes for this video"
             className="w-full min-h-[320px] resize-y bg-card text-foreground border border-border rounded-[3px] py-3.5 px-4 font-[family-name:var(--font-body)] text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
           />
         </div>
