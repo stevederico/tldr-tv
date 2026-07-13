@@ -1100,26 +1100,40 @@ app.post("/api/fetch-url", async (c) => {
       ? decodeHtmlEntities(titleMatch[1]).replace(/\s+/g, ' ').trim().replace(/\s*[|–—].*$/, '')
       : 'Untitled';
 
-    // Strip noise once, up front
+    // Strip noise once, up front. Drop comment blocks before container match —
+    // WordPress/MLBTR wrap each comment in <article class="comment-body">, which
+    // otherwise wins over the real post body.
     const cleaned = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '');
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<section[^>]+id=["']comments["'][^>]*>[\s\S]*?<\/section>/gi, '')
+      .replace(/<div[^>]+id=["']comments["'][^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<ol[^>]+class=["'][^"']*comment-list[^"']*["'][^>]*>[\s\S]*?<\/ol>/gi, '')
+      .replace(/<ul[^>]+class=["'][^"']*comment-list[^"']*["'][^>]*>[\s\S]*?<\/ul>/gi, '')
+      .replace(/<article[^>]+class=["'][^"']*comment-body[^"']*["'][^>]*>[\s\S]*?<\/article>/gi, '');
 
-    // Try to find the main content container (rough priority order)
+    // Prefer entry/post content before bare <article> (comments use <article> too).
     const containerRegexes = [
-      /<article[^>]*>([\s\S]*?)<\/article>/i,
-      /<main[^>]*>([\s\S]*?)<\/main>/i,
+      /<div[^>]+class=["'][^"']*\bentry-content\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]+class=["'][^"']*\b(?:post-content|article-body|article-content|post-body)\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
       /<div[^>]+(?:id|class)=["'][^"']*(?:post|article|content|entry-content|post-content|article-body)[^"']*["'][^>]*>([\s\S]*?)<\/div>/i,
+      /<main[^>]*>([\s\S]*?)<\/main>/i,
+      /<article(?![^>]*comment-body)[^>]*>([\s\S]*?)<\/article>/i,
     ];
 
     let mainHtml = '';
+    let bestLen = 0;
     for (const regex of containerRegexes) {
       const match = cleaned.match(regex);
-      if (match && match[1].length > 500) {
+      if (match && match[1].length > bestLen && match[1].length > 200) {
         mainHtml = match[1];
-        break;
+        bestLen = match[1].length;
+        // entry-content / post-content are high confidence — stop early
+        if (regex.source.includes('entry-content') || regex.source.includes('post-content')) {
+          break;
+        }
       }
     }
 

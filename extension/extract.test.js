@@ -87,4 +87,43 @@ describe('extractArticle', () => {
       /enough article text/i
     );
   });
+
+  it('prefers .entry-content over comment <article> bodies (MLBTR-style)', () => {
+    const articleP =
+      'Brewers right-hander Jacob Misiorowski was scratched from his start on Sunday due to fatigue and is expected to resume throwing soon after rest. ';
+    const doc = dom(`
+      <html><head>
+        <meta property="og:title" content="Jacob Misiorowski Update" />
+        <script type="application/ld+json">${JSON.stringify({
+          '@type': 'NewsArticle',
+          author: [{ '@type': 'Person', name: 'Charlie Wright' }],
+        })}</script>
+      </head>
+      <body>
+        <main>
+          <h1 class="entry-title">Jacob Misiorowski Update</h1>
+          <div class="entry-content">
+            <p>${articleP.repeat(3)}</p>
+            <p>${'The young righty has a microscopic ERA and piles up strikeouts with elite velocity. '.repeat(3)}</p>
+          </div>
+          <section id="comments" class="comments-area">
+            <ul class="comment-list">
+              <li class="comment">
+                <article class="comment-body">
+                  <p>Hope they don’t blow the kid out. Being a part-time Cub fan I would not care much if they did.</p>
+                </article>
+              </li>
+            </ul>
+          </section>
+        </main>
+      </body></html>
+    `);
+    const out = extractArticle(doc, {
+      pageUrl: 'https://www.mlbtraderumors.com/example.html',
+    });
+    assert.equal(out.author, 'Charlie Wright');
+    assert.ok(out.transcript.includes('Misiorowski was scratched'));
+    assert.ok(!out.transcript.includes('blow the kid out'));
+    assert.ok(out.transcript.length > 200);
+  });
 });
