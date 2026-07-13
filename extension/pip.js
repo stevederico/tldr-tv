@@ -35,7 +35,6 @@ const iconCompress = document.getElementById('iconCompress');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsMenu = document.getElementById('settingsMenu');
 const captionEl = document.getElementById('caption');
-const ccToggle = document.getElementById('ccToggle');
 const ccBtn = document.getElementById('ccBtn');
 const hlToggle = document.getElementById('hlToggle');
 const flashEl = document.getElementById('flash');
@@ -344,11 +343,10 @@ function stopCaptionLoop() {
 }
 
 /**
- * Reflect the current captions state on both toggles — the settings-menu
- * checkbox and the standalone CC button in the control bar.
+ * Reflect the current captions state on the standalone CC button in the control
+ * bar (aria-pressed + active styling).
  */
 function syncCaptionsUi() {
-  ccToggle?.setAttribute('aria-checked', captionsOn ? 'true' : 'false');
   ccBtn?.setAttribute('aria-pressed', captionsOn ? 'true' : 'false');
   ccBtn?.setAttribute('aria-label', captionsOn ? 'Turn captions off' : 'Turn captions on');
   if (ccBtn instanceof HTMLElement) {
@@ -684,10 +682,6 @@ async function init() {
   // Caption + word-highlight toggles (persisted). Keep the menu open on toggle.
   syncCaptionsUi();
   hlToggle?.setAttribute('aria-checked', highlightOn ? 'true' : 'false');
-  ccToggle?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleSetting('cc');
-  });
   hlToggle?.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleSetting('hl');

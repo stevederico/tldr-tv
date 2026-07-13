@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.86.0
+
+  Larger captions icon
+  Drop settings caption
+
 0.85.0
 
   PiP captions button
