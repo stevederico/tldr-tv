@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.97.0
+
+  Read title first
+
 0.96.0
 
   Re-render tracked audio

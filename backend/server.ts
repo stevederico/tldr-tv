@@ -1849,8 +1849,17 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
     const enc = createTtsStreamEncoder(streamFile);
     encoder = enc; // outer ref so the catch can tear it down
 
+    // Read the article title first, then the body. Guarded so a re-render (whose
+    // stored transcript already begins with the title) doesn't prepend it twice.
+    const ttsBody = guide.transcript ?? '';
+    const ttsTitle = (guide.title ?? '').trim();
+    const ttsTranscript =
+      ttsTitle && !ttsBody.trimStart().startsWith(ttsTitle)
+        ? `${/[.!?]$/.test(ttsTitle) ? ttsTitle : `${ttsTitle}.`}\n\n${ttsBody}`
+        : ttsBody;
+
     const { audioMp3, words, totalDuration, transcript: normalizedTranscript } = await synthesizeGuide({
-      transcript: guide.transcript ?? '',
+      transcript: ttsTranscript,
       onProgress: ({ chunksDone, chunksTotal }) => {
         // Best-effort progress write — errors here shouldn't kill the job.
         db.updateGuideJob(slug, 'tts', { chunksDone, chunksTotal }).catch(() => {});
