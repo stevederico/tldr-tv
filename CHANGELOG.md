@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.88.0
+
+  Play button icon
+  Transparent icon bg
+
 0.87.0
 
   Flush stream encoder

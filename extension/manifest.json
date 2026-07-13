@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Watch this article",
   "description": "Turn any open article into illustrated audio — plays as PiP on the page.",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "action": {
     "default_title": "Watch this article",
     "default_popup": "popup.html",
