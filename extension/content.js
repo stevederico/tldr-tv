@@ -1,11 +1,11 @@
 /**
- * Content script: extract + resizable on-page PiP shell (extension-origin iframe).
+ * Content script: extract + borderless resizable on-page PiP shell.
+ * No title bar — hover close (×) only; drag from a thin top edge.
  */
 (async () => {
   const HOST_ID = 'watch-this-article-pip-host';
   const DEFAULT_W = 560;
   const DEFAULT_H = 360;
-  const BAR_H = 32;
   const MIN_W = 320;
   const MIN_H = 220;
 
@@ -27,79 +27,39 @@
       right: '20px',
       bottom: '20px',
       width: `${DEFAULT_W}px`,
-      height: `${DEFAULT_H + BAR_H}px`,
+      height: `${DEFAULT_H}px`,
       zIndex: '2147483646',
       borderRadius: '12px',
-      // overflow auto/hidden required for CSS resize; also clips the iframe
       overflow: 'hidden',
       resize: 'both',
       boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
       background: '#000',
-      display: 'flex',
-      flexDirection: 'column',
       fontFamily: 'ui-sans-serif, system-ui, sans-serif',
       minWidth: `${MIN_W}px`,
-      minHeight: `${MIN_H + BAR_H}px`,
+      minHeight: `${MIN_H}px`,
       maxWidth: '96vw',
       maxHeight: '92vh',
       boxSizing: 'border-box',
     });
 
-    const bar = document.createElement('div');
-    Object.assign(bar.style, {
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '7px 10px',
-      background: 'rgba(20,20,20,0.98)',
-      color: '#fafafa',
-      cursor: 'grab',
-      userSelect: 'none',
-      flexShrink: '0',
-      height: `${BAR_H}px`,
-      boxSizing: 'border-box',
-      zIndex: '3',
-    });
-
-    const label = document.createElement('span');
-    label.textContent = 'Watch this article';
-    Object.assign(label.style, {
-      fontSize: '11px',
-      fontWeight: '600',
-      flex: '1',
-      opacity: '0.9',
-      letterSpacing: '-0.01em',
-    });
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.textContent = '×';
-    closeBtn.setAttribute('aria-label', 'Close player');
-    Object.assign(closeBtn.style, {
-      appearance: 'none',
-      border: '0',
-      background: 'transparent',
-      color: '#fafafa',
-      fontSize: '18px',
-      lineHeight: '1',
-      cursor: 'pointer',
-      padding: '0 4px',
-    });
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closePip();
-    });
-
-    bar.append(label, closeBtn);
-
-    const body = document.createElement('div');
-    Object.assign(body.style, {
-      position: 'relative',
-      flex: '1',
-      minHeight: '0',
-      width: '100%',
-      background: '#000',
-    });
+    // Inject hover styles once
+    if (!document.getElementById('watch-pip-hover-css')) {
+      const style = document.createElement('style');
+      style.id = 'watch-pip-hover-css';
+      style.textContent = `
+        #${HOST_ID} .watch-pip-close {
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.15s ease;
+        }
+        #${HOST_ID}:hover .watch-pip-close,
+        #${HOST_ID}:focus-within .watch-pip-close {
+          opacity: 1;
+          pointer-events: auto;
+        }
+      `;
+      document.documentElement.appendChild(style);
+    }
 
     const frame = document.createElement('iframe');
     frame.src = chrome.runtime.getURL(`pip.html?slug=${encodeURIComponent(slug)}`);
@@ -114,7 +74,53 @@
       background: '#000',
     });
 
-    // Large SE resize grip above the iframe so pointer events aren't eaten
+    // Invisible top strip for dragging (no visible bar)
+    const dragStrip = document.createElement('div');
+    dragStrip.setAttribute('aria-hidden', 'true');
+    Object.assign(dragStrip.style, {
+      position: 'absolute',
+      left: '0',
+      right: '40px',
+      top: '0',
+      height: '28px',
+      cursor: 'grab',
+      zIndex: '11',
+      touchAction: 'none',
+    });
+
+    // Hover-only close button (top-right)
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'watch-pip-close';
+    closeBtn.setAttribute('aria-label', 'Close player');
+    closeBtn.title = 'Close';
+    closeBtn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    Object.assign(closeBtn.style, {
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      zIndex: '12',
+      width: '28px',
+      height: '28px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      appearance: 'none',
+      border: '0',
+      borderRadius: '999px',
+      background: 'rgba(0,0,0,0.55)',
+      color: '#fff',
+      cursor: 'pointer',
+      padding: '0',
+      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+    });
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closePip();
+    });
+
+    // Resize grip (SE)
     const handle = document.createElement('div');
     handle.setAttribute('aria-label', 'Resize player');
     handle.title = 'Drag to resize';
@@ -125,23 +131,22 @@
       width: '28px',
       height: '28px',
       cursor: 'nwse-resize',
-      zIndex: '10',
+      zIndex: '12',
       touchAction: 'none',
       background:
         'linear-gradient(135deg, transparent 0 48%, rgba(255,255,255,0.25) 48% 52%, transparent 52% 62%, rgba(255,255,255,0.45) 62% 66%, transparent 66% 76%, rgba(255,255,255,0.7) 76% 80%, transparent 80%)',
     });
 
-    // Drag window
+    // Drag
     let dragging = false;
     let startX = 0;
     let startY = 0;
     let origLeft = 0;
     let origTop = 0;
 
-    bar.addEventListener('pointerdown', (e) => {
-      if (e.target === closeBtn) return;
+    dragStrip.addEventListener('pointerdown', (e) => {
       dragging = true;
-      bar.style.cursor = 'grabbing';
+      dragStrip.style.cursor = 'grabbing';
       const rect = host.getBoundingClientRect();
       startX = e.clientX;
       startY = e.clientY;
@@ -151,29 +156,29 @@
       host.style.bottom = 'auto';
       host.style.left = `${origLeft}px`;
       host.style.top = `${origTop}px`;
-      bar.setPointerCapture(e.pointerId);
+      dragStrip.setPointerCapture(e.pointerId);
     });
-    bar.addEventListener('pointermove', (e) => {
+    dragStrip.addEventListener('pointermove', (e) => {
       if (!dragging) return;
       host.style.left = `${Math.max(0, origLeft + e.clientX - startX)}px`;
       host.style.top = `${Math.max(0, origTop + e.clientY - startY)}px`;
     });
-    bar.addEventListener('pointerup', (e) => {
+    dragStrip.addEventListener('pointerup', (e) => {
       dragging = false;
-      bar.style.cursor = 'grab';
+      dragStrip.style.cursor = 'grab';
       try {
-        bar.releasePointerCapture(e.pointerId);
+        dragStrip.releasePointerCapture(e.pointerId);
       } catch {
         /* ignore */
       }
     });
 
-    // Manual resize (works even when CSS resize is ignored by the host page)
+    // Resize
     let resizing = false;
     let rStartX = 0;
     let rStartY = 0;
     let rW = DEFAULT_W;
-    let rH = DEFAULT_H + BAR_H;
+    let rH = DEFAULT_H;
 
     /**
      * @param {number} nw
@@ -182,10 +187,8 @@
     function applySize(nw, nh) {
       const maxW = window.innerWidth - 8;
       const maxH = window.innerHeight - 8;
-      const w = Math.min(maxW, Math.max(MIN_W, nw));
-      const h = Math.min(maxH, Math.max(MIN_H + BAR_H, nh));
-      host.style.width = `${w}px`;
-      host.style.height = `${h}px`;
+      host.style.width = `${Math.min(maxW, Math.max(MIN_W, nw))}px`;
+      host.style.height = `${Math.min(maxH, Math.max(MIN_H, nh))}px`;
     }
 
     handle.addEventListener('pointerdown', (e) => {
@@ -220,8 +223,7 @@
       resizing = false;
     });
 
-    body.append(frame, handle);
-    host.append(bar, body);
+    host.append(frame, dragStrip, closeBtn, handle);
     document.documentElement.appendChild(host);
   }
 
