@@ -83,8 +83,12 @@ const ROOT_SELECTORS = [
  * @property {string} sourceUrl
  * @property {string} [date]
  * @property {string} [thumbnail]
+ * @property {string[]} pageImages - Blog images for PiP while generated art loads
  * @property {boolean} fromSelection
  */
+
+/** Cap how many page images we keep for the PiP carousel. */
+export const MAX_PAGE_IMAGES = 12;
 
 /**
  * Read a meta content value by name or property.
@@ -180,6 +184,72 @@ export function extractThumbnail(doc) {
     metaContent(doc, 'twitter:image:src') ||
     ''
   );
+}
+
+/**
+ * Collect usable article images from the page (absolute http(s) URLs).
+ * Used as PiP artwork while Grok images generate (and kept as extras).
+ *
+ * @param {Document} doc
+ * @param {object} [opts]
+ * @param {string} [opts.pageUrl]
+ * @returns {string[]}
+ */
+export function extractPageImages(doc, opts = {}) {
+  const base =
+    (opts.pageUrl || doc.URL || '').trim() ||
+    (typeof location !== 'undefined' ? location.href : 'https://example.com/');
+
+  /** @type {string[]} */
+  const out = [];
+  /** @type {Set<string>} */
+  const seen = new Set();
+
+  /**
+   * @param {string} raw
+   */
+  function push(raw) {
+    if (!raw || raw.startsWith('data:')) return;
+    let abs = raw.trim();
+    try {
+      abs = new URL(abs, base).toString();
+    } catch {
+      return;
+    }
+    if (!/^https?:\/\//i.test(abs)) return;
+    // Skip obvious icons / trackers
+    if (/\b(sprite|icon|logo|avatar|emoji|1x1|pixel|badge|button)\b/i.test(abs)) return;
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    out.push(abs);
+  }
+
+  push(extractThumbnail(doc));
+
+  const root = pickContentRoot(doc);
+  const scope = root || doc.body;
+  if (scope && typeof scope.querySelectorAll === 'function') {
+    for (const img of scope.querySelectorAll('img[src], img[data-src], img[srcset]')) {
+      if (isInsideComments(img)) continue;
+      const src =
+        img.getAttribute('src') ||
+        img.getAttribute('data-src') ||
+        img.getAttribute('data-lazy-src') ||
+        '';
+      if (src) push(src);
+      const srcset = img.getAttribute('srcset') || '';
+      // Prefer largest candidate in srcset: "url 1x, url2 2x"
+      const last = srcset
+        .split(',')
+        .map((p) => p.trim().split(/\s+/)[0])
+        .filter(Boolean)
+        .pop();
+      if (last) push(last);
+      if (out.length >= MAX_PAGE_IMAGES) break;
+    }
+  }
+
+  return out.slice(0, MAX_PAGE_IMAGES);
 }
 
 /**
@@ -291,6 +361,7 @@ export function extractArticle(doc, opts = {}) {
   const author = extractAuthor(doc);
   const date = extractDate(doc);
   const thumbnail = extractThumbnail(doc);
+  const pageImages = extractPageImages(doc, { pageUrl: sourceUrl });
 
   if (selection.length >= MIN_SELECTION_CHARS) {
     return {
@@ -300,6 +371,7 @@ export function extractArticle(doc, opts = {}) {
       sourceUrl,
       date: date || undefined,
       thumbnail: thumbnail || undefined,
+      pageImages,
       fromSelection: true,
     };
   }
@@ -320,6 +392,7 @@ export function extractArticle(doc, opts = {}) {
     sourceUrl,
     date: date || undefined,
     thumbnail: thumbnail || undefined,
+    pageImages,
     fromSelection: false,
   };
 }

@@ -37,8 +37,10 @@ Add matching `host_permissions` in `manifest.json` for non-local hosts.
 - **Selection fallback** — if you select ≥80 chars first, that text is used (paywalled pages you can already read)
 - **No paywall bypass** — only visible/selected DOM text
 - **Create** — same payload shape as the library Create modal
-- **PiP (default)** — floating player on the blog page (`pip.html` in extension origin so HTTPS pages can play localhost audio)
-- **Full** — optional open of `/app/:slug` from the PiP
+- **PiP (default)** — large resizable floating player on the blog (YouTube-style chrome)
+- **Blog images first** — page/og images while Grok art generates; then both rotate
+- **Autoplay** when audio is ready; progress bar for analyze / TTS / images
+- **Full** — open `/app/:slug` from the PiP
 
 ## Tests
 

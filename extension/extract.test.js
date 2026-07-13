@@ -5,6 +5,7 @@ import {
   extractArticle,
   extractTitle,
   extractAuthor,
+  extractPageImages,
   MIN_TRANSCRIPT_CHARS,
 } from './extract.js';
 
@@ -86,6 +87,23 @@ describe('extractArticle', () => {
       () => extractArticle(doc, { pageUrl: 'https://example.com/x' }),
       /enough article text/i
     );
+  });
+
+  it('collects blog images from entry-content', () => {
+    const doc = dom(`
+      <html><head><meta property="og:image" content="https://cdn.example.com/og.jpg" /></head>
+      <body><div class="entry-content">
+        <p>${'Paragraph with enough characters for the body extract path to keep. '.repeat(2)}</p>
+        <img src="https://cdn.example.com/photo1.jpg" />
+        <img src="/icons/logo.png" />
+        <img data-src="https://cdn.example.com/photo2.jpg" />
+      </div></body></html>
+    `);
+    const imgs = extractPageImages(doc, { pageUrl: 'https://example.com/a' });
+    assert.ok(imgs.includes('https://cdn.example.com/og.jpg'));
+    assert.ok(imgs.includes('https://cdn.example.com/photo1.jpg'));
+    assert.ok(imgs.includes('https://cdn.example.com/photo2.jpg'));
+    assert.ok(!imgs.some((u) => u.includes('logo.png')));
   });
 
   it('prefers .entry-content over comment <article> bodies (MLBTR-style)', () => {

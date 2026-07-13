@@ -1,25 +1,19 @@
 /**
- * Content script (classic): extract helpers + on-page PiP shell.
- *
- * Classic (not type:module) so Chrome reliably injects it; extract.js stays ESM
- * and is imported through chrome.runtime.getURL.
+ * Content script: extract + resizable on-page PiP shell (extension-origin iframe).
  */
 (async () => {
   const HOST_ID = 'watch-this-article-pip-host';
+  const DEFAULT_W = 560;
+  const DEFAULT_H = 360;
+  const MIN_W = 360;
+  const MIN_H = 240;
 
-  /**
-   * Remove the floating PiP host if present.
-   * @returns {void}
-   */
   function closePip() {
     document.getElementById(HOST_ID)?.remove();
   }
 
   /**
-   * Mount a draggable PiP frame on the blog page (extension-origin iframe).
-   *
    * @param {string} slug
-   * @returns {void}
    */
   function showPip(slug) {
     closePip();
@@ -29,18 +23,22 @@
     host.setAttribute('data-watch-pip', '1');
     Object.assign(host.style, {
       position: 'fixed',
-      right: '16px',
-      bottom: '16px',
-      width: '340px',
-      height: '320px',
+      right: '20px',
+      bottom: '20px',
+      width: `${DEFAULT_W}px`,
+      height: `${DEFAULT_H + 32}px`,
       zIndex: '2147483646',
       borderRadius: '12px',
       overflow: 'hidden',
-      boxShadow: '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.08)',
-      background: '#0a0a0a',
+      boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
+      background: '#000',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      minWidth: `${MIN_W}px`,
+      minHeight: `${MIN_H + 32}px`,
+      maxWidth: 'min(920px, 96vw)',
+      maxHeight: 'min(720px, 92vh)',
     });
 
     const bar = document.createElement('div');
@@ -48,14 +46,15 @@
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      padding: '6px 8px',
-      background: '#141414',
+      padding: '7px 10px',
+      background: 'rgba(20,20,20,0.98)',
       color: '#fafafa',
       cursor: 'grab',
       userSelect: 'none',
       flexShrink: '0',
+      height: '32px',
+      boxSizing: 'border-box',
     });
-    bar.setAttribute('data-pip-drag', '1');
 
     const label = document.createElement('span');
     label.textContent = 'Watch this article';
@@ -64,6 +63,7 @@
       fontWeight: '600',
       flex: '1',
       opacity: '0.9',
+      letterSpacing: '-0.01em',
     });
 
     const closeBtn = document.createElement('button');
@@ -95,10 +95,11 @@
       border: '0',
       width: '100%',
       flex: '1',
-      background: '#0a0a0a',
+      background: '#000',
+      minHeight: '0',
     });
 
-    // Drag via title bar
+    // Drag
     let dragging = false;
     let startX = 0;
     let startY = 0;
@@ -120,26 +121,77 @@
       host.style.top = `${origTop}px`;
       bar.setPointerCapture(e.pointerId);
     });
-
     bar.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      host.style.left = `${Math.max(8, origLeft + dx)}px`;
-      host.style.top = `${Math.max(8, origTop + dy)}px`;
+      host.style.left = `${Math.max(8, origLeft + e.clientX - startX)}px`;
+      host.style.top = `${Math.max(8, origTop + e.clientY - startY)}px`;
     });
-
     bar.addEventListener('pointerup', (e) => {
       dragging = false;
       bar.style.cursor = 'grab';
       try {
         bar.releasePointerCapture(e.pointerId);
       } catch {
-        // ignore
+        /* ignore */
       }
     });
 
-    host.append(bar, frame);
+    // Resize handle (bottom-right)
+    const handle = document.createElement('div');
+    handle.setAttribute('aria-label', 'Resize player');
+    handle.title = 'Resize';
+    Object.assign(handle.style, {
+      position: 'absolute',
+      right: '0',
+      bottom: '0',
+      width: '18px',
+      height: '18px',
+      cursor: 'nwse-resize',
+      zIndex: '2',
+      background:
+        'linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.35) 50%)',
+    });
+
+    let resizing = false;
+    let rStartX = 0;
+    let rStartY = 0;
+    let rW = DEFAULT_W;
+    let rH = DEFAULT_H + 32;
+
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizing = true;
+      rStartX = e.clientX;
+      rStartY = e.clientY;
+      const rect = host.getBoundingClientRect();
+      rW = rect.width;
+      rH = rect.height;
+      // pin top-left while resizing from SE
+      host.style.right = 'auto';
+      host.style.bottom = 'auto';
+      host.style.left = `${rect.left}px`;
+      host.style.top = `${rect.top}px`;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!resizing) return;
+      const nw = Math.max(MIN_W, rW + (e.clientX - rStartX));
+      const nh = Math.max(MIN_H + 32, rH + (e.clientY - rStartY));
+      host.style.width = `${nw}px`;
+      host.style.height = `${nh}px`;
+    });
+    handle.addEventListener('pointerup', (e) => {
+      resizing = false;
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    });
+
+    host.style.position = 'fixed';
+    host.append(bar, frame, handle);
     document.documentElement.appendChild(host);
   }
 

@@ -64,11 +64,47 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           throw new Error('Missing article payload');
         }
         const { slug } = await createGuide(article);
+        // Blog images for PiP while generated art loads (not stored on guide row)
+        const pageImages = Array.isArray(article.pageImages)
+          ? article.pageImages.filter((u) => typeof u === 'string').slice(0, 12)
+          : [];
+        if (pageImages.length || article.thumbnail) {
+          const imgs = [
+            ...(typeof article.thumbnail === 'string' ? [article.thumbnail] : []),
+            ...pageImages,
+          ];
+          await chrome.storage.session.set({
+            [`pip:${slug}`]: { pageImages: [...new Set(imgs)] },
+          });
+        }
         sendResponse({ ok: true, slug });
       } catch (err) {
         sendResponse({
           ok: false,
           error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (message?.type === 'GET_PIP_CONTEXT') {
+    (async () => {
+      try {
+        const slug = typeof message.slug === 'string' ? message.slug : '';
+        if (!slug) throw new Error('Missing slug');
+        const key = `pip:${slug}`;
+        const stored = await chrome.storage.session.get(key);
+        const ctx = stored[key];
+        sendResponse({
+          ok: true,
+          pageImages: Array.isArray(ctx?.pageImages) ? ctx.pageImages : [],
+        });
+      } catch (err) {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+          pageImages: [],
         });
       }
     })();
