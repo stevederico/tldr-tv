@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.99.0
+
+  Untrack generated audio
+
 0.98.0
 
   Filter small images

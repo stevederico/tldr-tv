@@ -48,3 +48,6 @@ SKATEBOARD_UI_EXTENSIONS_PROPOSAL.md
 
 # Kokoro TTS models + voice embeddings — downloaded on first run
 backend/tts/models/
+
+# Generated TTS audio (regenerable from transcripts via the TTS pipeline)
+backend/public/audio/
