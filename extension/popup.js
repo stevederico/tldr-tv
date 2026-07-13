@@ -1,5 +1,5 @@
 /**
- * Popup UI: extract article from active tab → create guide → open player.
+ * Popup UI: extract → create guide → show on-page PiP (no redirect).
  */
 
 const watchBtn = document.getElementById('watch');
@@ -36,8 +36,6 @@ function sendTabMessage(tabId, message) {
 }
 
 /**
- * Inject content script if missing (pages open before install, or failed auto-inject).
- *
  * @param {number} tabId
  * @returns {Promise<void>}
  */
@@ -54,7 +52,6 @@ async function ensureContentScript(tabId) {
     files: ['content.js'],
   });
 
-  // content.js loads extract async — brief retry for listener registration
   let lastErr = new Error('Content script did not become ready');
   for (let i = 0; i < 10; i++) {
     await new Promise((r) => setTimeout(r, 50));
@@ -105,6 +102,21 @@ async function createViaBackground(article) {
   return { slug: res.slug };
 }
 
+/**
+ * Show floating PiP on the blog tab.
+ *
+ * @param {number} tabId
+ * @param {string} slug
+ * @returns {Promise<void>}
+ */
+async function showPipOnTab(tabId, slug) {
+  await ensureContentScript(tabId);
+  const res = await sendTabMessage(tabId, { type: 'SHOW_PIP', slug });
+  if (!res?.ok) {
+    throw new Error(res?.error || 'Could not open on-page player');
+  }
+}
+
 async function handleWatch() {
   if (!(watchBtn instanceof HTMLButtonElement)) return;
   watchBtn.disabled = true;
@@ -122,7 +134,9 @@ async function handleWatch() {
     setStatus(`Creating guide from ${mode}…`);
 
     const { slug } = await createViaBackground(article);
-    setStatus(`Opening player: ${slug}`, 'ok');
+    setStatus('Opening player on this page…');
+    await showPipOnTab(tab.id, slug);
+    setStatus(`Playing on page: ${slug}`, 'ok');
   } catch (err) {
     setStatus(err instanceof Error ? err.message : String(err), 'error');
   } finally {

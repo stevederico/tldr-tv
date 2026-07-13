@@ -11,6 +11,7 @@ Wedge: open-web “Listen mode with pictures.” Extension first; widget is P5.
 - [x] POST same payload as URL import → poll jobs → open `/app/:slug`
 - [x] Toolbar action: "Watch this article"
 - [x] Never bypass paywalls / login walls
+- [x] On-page PiP player (default) instead of redirecting away from the blog
 
 ## P1 — Make it feel like “watch” (not just listen)
 

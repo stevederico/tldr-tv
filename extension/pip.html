@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Watch</title>
+    <link rel="stylesheet" href="pip.css" />
+  </head>
+  <body>
+    <div class="pip" id="root">
+      <div class="hero" id="hero">
+        <img id="cover" alt="" hidden />
+        <div class="hero-overlay" id="status">Preparing…</div>
+      </div>
+      <div class="meta">
+        <p class="title" id="title">Watch this article</p>
+        <p class="sub" id="sub"></p>
+      </div>
+      <div class="controls">
+        <button type="button" id="play" class="btn primary" aria-label="Play" disabled>
+          Play
+        </button>
+        <span class="time" id="time" aria-live="off">0:00 / 0:00</span>
+        <button type="button" id="open" class="btn ghost" aria-label="Open full player">
+          Full
+        </button>
+      </div>
+      <input
+        type="range"
+        id="seek"
+        class="seek"
+        min="0"
+        max="0"
+        value="0"
+        step="0.1"
+        aria-label="Seek"
+        disabled
+      />
+      <audio id="audio" preload="metadata"></audio>
+    </div>
+    <script type="module" src="pip.js"></script>
+  </body>
+</html>

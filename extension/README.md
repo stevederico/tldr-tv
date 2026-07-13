@@ -8,7 +8,8 @@ Chrome MV3 extension for Book Player. On any open article: extract text → `POS
 2. Chrome → `chrome://extensions` → Developer mode → **Load unpacked**
 3. Select this `extension/` folder
 4. Open a free article (blog, Substack, etc.) → click the extension → **Watch this article**
-5. After reloading the extension, **reload the article tab** (or just click Watch — it injects on demand)
+5. A **floating PiP** appears on the blog page (no redirect). Drag the title bar; **Full** opens the full player; **×** closes.
+6. After reloading the extension, reload the article tab if the content script was stale
 
 ## Config
 
@@ -36,7 +37,8 @@ Add matching `host_permissions` in `manifest.json` for non-local hosts.
 - **Selection fallback** — if you select ≥80 chars first, that text is used (paywalled pages you can already read)
 - **No paywall bypass** — only visible/selected DOM text
 - **Create** — same payload shape as the library Create modal
-- **Player** — opens `/app/:slug` (pipeline may still be running)
+- **PiP (default)** — floating player on the blog page (`pip.html` in extension origin so HTTPS pages can play localhost audio)
+- **Full** — optional open of `/app/:slug` from the PiP
 
 ## Tests
 
