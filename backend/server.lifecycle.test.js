@@ -87,7 +87,7 @@ const {
   tokenExpireTimestamp,
   config,
   shouldStartServer,
-  __testTtsStreamNext,
+  __testStreamTailNext,
   __testShouldMergeStreamTiming,
 } = await import('./server.ts');
 
@@ -1513,33 +1513,33 @@ describe('server registration hooks', () => {
   });
 });
 
-describe('__testTtsStreamNext (progressive TTS stream loop)', () => {
+describe('__testStreamTailNext (progressive stream tail loop)', () => {
   const running = { chunksTotal: 5, chunksDone: 2, done: false, failed: false };
 
-  it('writes the part when it exists on disk', () => {
-    assert.equal(__testTtsStreamNext(0, true, running), 'write');
+  it('writes when the file has grown past the sent offset', () => {
+    assert.equal(__testStreamTailNext(1000, 4096, running), 'write');
   });
 
-  it('waits when the next part is not ready but the render is still running', () => {
-    assert.equal(__testTtsStreamNext(2, false, running), 'wait');
+  it('waits when no new bytes yet but the render is still running', () => {
+    assert.equal(__testStreamTailNext(4096, 4096, running), 'wait');
   });
 
   it('ends when the state file is gone', () => {
-    assert.equal(__testTtsStreamNext(0, false, null), 'end');
+    assert.equal(__testStreamTailNext(0, 0, null), 'end');
   });
 
-  it('ends when the render failed', () => {
-    assert.equal(__testTtsStreamNext(1, false, { ...running, failed: true }), 'end');
+  it('flushes pending bytes even on failure, then ends once drained', () => {
+    assert.equal(__testStreamTailNext(0, 2048, { ...running, failed: true }), 'write');
+    assert.equal(__testStreamTailNext(2048, 2048, { ...running, failed: true }), 'end');
   });
 
-  it('ends when done and all parts have been flushed', () => {
-    assert.equal(__testTtsStreamNext(4, false, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'end');
+  it('ends when done and all bytes have been drained', () => {
+    assert.equal(__testStreamTailNext(8192, 8192, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'end');
   });
 
-  it('still flushes remaining parts after done before ending', () => {
-    // done=true but the consumer is behind (idx < chunksDone): keep going.
-    assert.equal(__testTtsStreamNext(2, false, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'wait');
-    assert.equal(__testTtsStreamNext(2, true, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
+  it('still flushes trailing bytes after done before ending', () => {
+    // done=true but the consumer is behind (offset < size): keep going.
+    assert.equal(__testStreamTailNext(4096, 8192, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
   });
 });
 

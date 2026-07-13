@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.83.1
+
+  Fix stream popping
+  Gapless stream encode
+
 0.83.0
 
   Stream caption timings

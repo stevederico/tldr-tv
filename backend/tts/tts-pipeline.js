@@ -206,12 +206,13 @@ function chunkBySentence(text, maxChars = MAX_CHUNK_CHARS) {
  * @param {number} [args.speed=1] - Speech rate
  * @param {function({chunksDone: number, chunksTotal: number}): void} [args.onProgress]
  * @param {function(Buffer, {index: number, chunksDone: number, chunksTotal: number}): (void | Promise<void>)} [args.onChunk]
- *   Called once per source chunk with that chunk's audio as a standalone MP3
- *   (Xing header suppressed) as soon as it renders — used to stream playback
- *   before the full guide finishes. Concatenating these in order yields a
- *   playable stream. The canonical `audioMp3` return value is still a single
- *   sample-accurate encode; onChunk is a delivery optimization, not the source
- *   of truth. Awaited, so a slow writer backpressures synthesis.
+ *   Called once per source chunk with that chunk's raw PCM (16-bit mono @
+ *   KOKORO_SAMPLE_RATE, WAV header stripped) as soon as it renders — used to
+ *   stream playback before the full guide finishes. Feed the PCM into ONE
+ *   continuous encoder (not per-chunk MP3s, which add audible encoder-delay
+ *   silence at every seam). The canonical `audioMp3` return value is still a
+ *   single sample-accurate encode; onChunk is a delivery optimization, not the
+ *   source of truth. Awaited, so a slow writer backpressures synthesis.
  * @returns {Promise<{audioMp3: Buffer, words: Array<{w: string, t: number}>, totalDuration: number, sampleRate: number, transcript: string}>}
  *          `audioMp3` is 64kbps mono MP3 — the pipeline renders WAV internally
  *          for sample-accurate splicing, then transcodes once at the very end.
@@ -308,17 +309,20 @@ export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 
     done += 1;
     onProgress?.({ chunksDone: done, chunksTotal });
 
-    // Emit this chunk's audio as a standalone MP3 for streaming. Best-effort:
-    // a streaming failure must not abort the canonical render.
+    // Emit this chunk's audio as raw PCM (16-bit mono @ KOKORO_SAMPLE_RATE) for
+    // streaming. Raw PCM — not a per-chunk MP3 — so the caller can feed one
+    // continuous encoder: independently-encoded MP3 chunks add ~a frame of
+    // encoder-delay silence at every seam, which is audible as a trip/pop.
+    // Best-effort: a streaming failure must not abort the canonical render.
     if (onChunk) {
       const chunkWavs = wavs.slice(chunkWavStart);
       if (chunkWavs.length) {
         try {
           const chunkWav = concatWav(chunkWavs, KOKORO_SAMPLE_RATE, { fadeMs: 0 });
-          const chunkMp3 = await wavToMp3(chunkWav, { xing: false });
+          const pcm = chunkWav.subarray(44); // strip the 44-byte WAV header
           // Pass the cumulative word timings + the normalized transcript so the
           // caller can stream captions for the portion rendered so far.
-          await onChunk(chunkMp3, { index: i, chunksDone: done, chunksTotal, words: words.slice(), transcript: normalized });
+          await onChunk(pcm, { index: i, chunksDone: done, chunksTotal, words: words.slice(), transcript: normalized });
         } catch (err) {
           console.error(`[tts] onChunk failed for chunk ${i}:`, err instanceof Error ? err.message : err);
         }

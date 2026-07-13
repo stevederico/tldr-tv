@@ -11,15 +11,16 @@ import Stripe from "stripe";
 import crypto from "crypto";
 
 import { databaseManager } from "./adapters/manager.ts";
-import { synthesize } from "./tts/kokoro.js";
+import { synthesize, KOKORO_SAMPLE_RATE } from "./tts/kokoro.js";
 import { generateChapters } from "./tts/chapters.js";
 import { analyzeTranscript, attachChapterTimes } from "./tts/analyze.js";
 import { synthesizeGuide } from "./tts/tts-pipeline.js";
 import { generateImage, extFromContentType, pLimit } from "./utils/grokImagine.js";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync, existsSync, createWriteStream, openSync, readSync, closeSync } from 'node:fs';
 import { writeFile, mkdir as mkdirP, rm } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { BackendConfig, BoundDatabase, CsrfTokenEntry, DatabaseConfig, JwtPayload, Logger, Subscription, UserSetFields, Guide, GuideInput, GuideChapter, GuideTiming } from './types.ts';
 import { createLogger } from './lib/logger.ts';
@@ -1508,10 +1509,10 @@ app.post("/api/guides/:slug/tts", async (c) => {
   }
 });
 
-// Progressive audio stream: serve each TTS chunk's MP3 as soon as it renders so
-// the player starts within ~1-2s instead of waiting for the full guide. Once
-// the canonical file exists we redirect to it (Range-seekable). Concatenating
-// the per-chunk MP3s (Xing header suppressed) yields a valid playable stream.
+// Progressive audio stream: tail the single growing `<slug>.parts/stream.mp3`
+// (one continuous encode — no per-chunk seam gaps) so the player starts within
+// ~1-2s instead of waiting for the full guide. Once the canonical file exists we
+// redirect to it (Range-seekable).
 app.get('/api/guides/:slug/stream.mp3', async (c) => {
   const slug = c.req.param('slug');
   if (!SLUG_REGEX.test(slug)) return c.json({ error: 'Invalid slug' }, 400);
@@ -1523,27 +1524,33 @@ app.get('/api/guides/:slug/stream.mp3', async (c) => {
 
   const partsDir = ttsPartsDir(audioDir, slug);
   if (!readTtsState(partsDir)) return c.json({ error: 'Not generating' }, 404);
+  const streamFile = resolve(partsDir, 'stream.mp3');
 
   c.header('Content-Type', 'audio/mpeg');
   c.header('Cache-Control', 'no-store');
-  // Defeat proxy buffering so chunks reach the client as they're written.
+  // Defeat proxy buffering so bytes reach the client as they're written.
   c.header('X-Accel-Buffering', 'no');
 
   const POLL_MS = 150;
   const MAX_IDLE_MS = 120_000;
   return stream(c, async (s) => {
-    let idx = 0;
+    let offset = 0;
     let idleMs = 0;
     while (!s.aborted) {
-      const partPath = ttsPartPath(partsDir, idx);
-      const decision = __testTtsStreamNext(idx, existsSync(partPath), readTtsState(partsDir));
+      let size = 0;
+      try {
+        size = statSync(streamFile).size;
+      } catch {
+        size = 0; // file not created yet
+      }
+      const decision = __testStreamTailNext(offset, size, readTtsState(partsDir));
       if (decision === 'write') {
         try {
-          await s.write(readFileSync(partPath));
+          await s.write(readFileRange(streamFile, offset, size - offset));
         } catch {
           break; // client went away
         }
-        idx++;
+        offset = size;
         idleMs = 0;
         continue;
       }
@@ -1555,24 +1562,36 @@ app.get('/api/guides/:slug/stream.mp3', async (c) => {
   });
 });
 
+/** Read `length` bytes from `path` starting at `start`. */
+function readFileRange(path: string, start: number, length: number): Buffer {
+  const fd = openSync(path, 'r');
+  try {
+    const buf = Buffer.allocUnsafe(length);
+    const n = readSync(fd, buf, 0, length, start);
+    return buf.subarray(0, n);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /**
- * Pure state-machine step for the TTS stream loop: given the next part index,
- * whether that part file exists, and the current stream state, decide whether
- * to write the part, wait for it, or end the stream. Extracted for unit testing.
+ * Pure state-machine step for the stream tail loop: given the bytes already
+ * sent, the current file size, and the render state, decide whether to send new
+ * bytes, wait, or end. Extracted for unit testing.
  *
- * @param idx - Next part index the stream wants to send
- * @param partExists - Whether `<idx>.mp3` exists on disk
+ * @param offset - Bytes already written to the client
+ * @param size - Current size of the stream file on disk
  * @param state - Current streaming state, or null when the state file is gone
- * @returns 'write' to send the part, 'end' to close, 'wait' to poll again
+ * @returns 'write' to send new bytes, 'end' to close, 'wait' to poll again
  */
-export function __testTtsStreamNext(
-  idx: number,
-  partExists: boolean,
+export function __testStreamTailNext(
+  offset: number,
+  size: number,
   state: TtsStreamState | null
 ): 'write' | 'end' | 'wait' {
-  if (partExists) return 'write';
+  if (size > offset) return 'write';
   if (!state || state.failed) return 'end';
-  if (state.done && idx >= state.chunksDone) return 'end'; // all parts flushed
+  if (state.done && offset >= size) return 'end'; // fully drained
   return 'wait';
 }
 
@@ -1588,14 +1607,9 @@ interface TtsStreamState {
   failed: boolean;
 }
 
-/** Directory holding a slug's streaming MP3 parts + state.json. */
+/** Directory holding a slug's streaming artifacts (stream.mp3 + state + timing). */
 function ttsPartsDir(audioDir: string, slug: string): string {
   return resolve(audioDir, `${slug}.parts`);
-}
-
-/** Zero-padded part path, e.g. `007.mp3`. */
-function ttsPartPath(partsDir: string, index: number): string {
-  return resolve(partsDir, `${String(index).padStart(3, '0')}.mp3`);
 }
 
 /** Write the streaming state file (best-effort, never throws). */
@@ -1669,11 +1683,73 @@ function readTtsState(partsDir: string): TtsStreamState | null {
   }
 }
 
+/** A continuous PCM→MP3 encoder writing to a single growing stream file. */
+interface TtsStreamEncoder {
+  /** Feed a chunk of 16-bit mono PCM; resolves once the write is buffered/drained. */
+  write: (pcm: Buffer) => Promise<void>;
+  /** Close stdin and resolve once all MP3 output is flushed to the file. */
+  end: () => Promise<void>;
+  /** Hard-stop the subprocess (failure path). */
+  kill: () => void;
+}
+
+/**
+ * Spawn one long-lived ffmpeg that reads raw PCM (16-bit mono @
+ * KOKORO_SAMPLE_RATE) on stdin and writes a single continuous MP3 to
+ * `streamFile`. One encoder for the whole render means one encoder delay at the
+ * very start, so there are no per-chunk seam gaps (the audible trip/pop).
+ *
+ * @param streamFile - Destination MP3 path (grows as chunks are fed)
+ * @returns Encoder handle
+ */
+function createTtsStreamEncoder(streamFile: string): TtsStreamEncoder {
+  const ff = spawn('ffmpeg', [
+    '-loglevel', 'error',
+    '-f', 's16le', '-ar', String(KOKORO_SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0',
+    '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
+    '-f', 'mp3', 'pipe:1',
+  ]);
+  const out = createWriteStream(streamFile);
+  ff.stdout.pipe(out);
+  // Swallow all stream/process errors so a broken pipe (EPIPE when ffmpeg exits
+  // or is killed) never bubbles to an unhandled 'error' event — which would be
+  // re-thrown by the phonemizer runtime's global handlers and crash the process.
+  // Real failures surface via the job's try/catch (empty/short audio).
+  ff.stderr.on('data', () => {});
+  ff.on('error', () => {});
+  ff.stdin.on('error', () => {});
+  ff.stdout.on('error', () => {});
+  out.on('error', () => {});
+  return {
+    write: (pcm) =>
+      new Promise((res) => {
+        if (!ff.stdin.writable) return res();
+        if (ff.stdin.write(pcm)) res();
+        else ff.stdin.once('drain', res);
+      }),
+    end: () =>
+      new Promise((res) => {
+        out.on('close', () => res());
+        out.on('error', () => res());
+        ff.on('error', () => res());
+        ff.stdin.end();
+      }),
+    kill: () => {
+      try {
+        ff.kill('SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    },
+  };
+}
+
 /**
  * Background TTS job: synthesize the full transcript and persist results.
  * Updates Guides.jobs_json on progress and on terminal state (done/failed).
- * Also writes each chunk's MP3 to `<slug>.parts/` as it renders so the stream
- * endpoint can start playback before the full render finishes.
+ * Also streams the audio to `<slug>.parts/stream.mp3` (via one continuous
+ * encoder) + a timing sidecar as it renders, so the stream endpoint can start
+ * gapless playback before the full render finishes.
  *
  * @param {string} slug
  * @param {Object} guide - The guide payload at job kickoff
@@ -1683,6 +1759,7 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
   const t0 = Date.now();
   const audioDir = resolve(__dirname, './public/audio');
   const partsDir = ttsPartsDir(audioDir, slug);
+  let encoder: TtsStreamEncoder | null = null;
   try {
     await mkdirP(audioDir, { recursive: true });
     const outPath = resolve(audioDir, `${slug}.mp3`);
@@ -1693,16 +1770,23 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
     const state: TtsStreamState = { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
     writeTtsState(partsDir, state);
 
+    // One continuous encoder for the whole stream: chunk PCM goes in, a single
+    // growing MP3 comes out. Encoding each chunk to its own MP3 and
+    // concatenating them adds ~a frame of encoder-delay silence at every seam
+    // (audible trip/pop) — one encoder has a single delay at the very start.
+    const streamFile = resolve(partsDir, 'stream.mp3');
+    const enc = createTtsStreamEncoder(streamFile);
+    encoder = enc; // outer ref so the catch can tear it down
+
     const { audioMp3, words, totalDuration, transcript: normalizedTranscript } = await synthesizeGuide({
       transcript: guide.transcript ?? '',
       onProgress: ({ chunksDone, chunksTotal }) => {
         // Best-effort progress write — errors here shouldn't kill the job.
         db.updateGuideJob(slug, 'tts', { chunksDone, chunksTotal }).catch(() => {});
       },
-      onChunk: (mp3, { index, chunksTotal, words, transcript: normalized }) => {
-        // Write this chunk's standalone MP3 so streaming clients can play it
-        // immediately. Sequential + awaited in the pipeline, so no races here.
-        writeFileSync(ttsPartPath(partsDir, index), mp3);
+      onChunk: async (pcm, { index, chunksTotal, words, transcript: normalized }) => {
+        // Feed the chunk's PCM into the continuous encoder (backpressure-aware).
+        await enc.write(pcm);
         // Sidecar: cumulative word timings + normalized transcript so the
         // player can render captions for the portion rendered so far.
         writeTtsTiming(partsDir, { words, transcript: normalized });
@@ -1712,6 +1796,9 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
       },
     });
 
+    // Flush + finish the stream encoder before marking done so tailing clients
+    // read a complete file.
+    await enc.end();
     await writeFile(outPath, audioMp3);
     // Canonical file is ready — mark parts done so streams drain and finish,
     // then drop the parts dir after a grace period for any in-flight readers.
@@ -1740,6 +1827,8 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
     logger.info('TTS job done', { slug, durationSec: totalDuration, words: words.length, ms: Date.now() - t0 });
   } catch (err) {
     logger.error('TTS job failed', { slug, error: (err as Error).message });
+    // Tear down the encoder subprocess so it doesn't dangle.
+    encoder?.kill();
     // Signal streaming clients to stop, then clean up partial artifacts.
     const failed = readTtsState(partsDir) ?? { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
     writeTtsState(partsDir, { ...failed, failed: true });

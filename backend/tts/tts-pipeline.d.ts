@@ -39,7 +39,7 @@ export function synthesizeGuide(args: {
   voice?: string;
   speed?: number;
   onProgress?: (progress: TtsProgress) => void;
-  onChunk?: (mp3: Buffer, meta: TtsChunkMeta) => void | Promise<void>;
+  onChunk?: (pcm: Buffer, meta: TtsChunkMeta) => void | Promise<void>;
 }): Promise<{
   audioMp3: Buffer;
   words: WordTiming[];

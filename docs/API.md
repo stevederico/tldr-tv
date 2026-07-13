@@ -333,11 +333,13 @@ Multipart upload. Stores the file at `backend/public/audio/<slug>.mp3` and updat
 
 #### GET /api/guides/:slug/stream.mp3
 Progressive audio for fast playback start. While TTS is still rendering, the
-background job writes each chunk's MP3 to `<slug>.parts/` as it completes; this
-endpoint concatenates those parts into a single chunked-transfer response,
-holding the connection open and appending new chunks as they land. The player
-starts within ~1-2s instead of waiting for the whole render. Once the canonical
-`<slug>.mp3` exists, the endpoint `302`-redirects to it (Range-seekable).
+background job feeds each chunk's PCM into one continuous ffmpeg encoder that
+writes a single growing `<slug>.parts/stream.mp3`; this endpoint tails that file
+over a chunked-transfer response, holding the connection open and appending new
+bytes as they land. One encoder (not per-chunk MP3s concatenated) means no
+encoder-delay silence at chunk seams — gapless audio. The player starts within
+~1-2s instead of waiting for the whole render. Once the canonical `<slug>.mp3`
+exists, the endpoint `302`-redirects to it (Range-seekable).
 
 **Response:**
 - `200` — `audio/mpeg`, `Transfer-Encoding: chunked` (live render in progress)
