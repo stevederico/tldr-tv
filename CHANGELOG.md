@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.80.1
+
+  Fix PiP audio
+
 0.80.0
 
   Expand competitor research

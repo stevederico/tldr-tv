@@ -661,6 +661,21 @@ export function __testBuildSecureHeadersOptions(prod: boolean = isProd()) {
   };
 }
 
+// Public content assets (audio + images) are meant to be embedded cross-origin —
+// e.g. the Chrome extension's PiP player runs on a chrome-extension:// origin and
+// loads the <audio> from this backend. secureHeaders() sets a global
+// Cross-Origin-Resource-Policy: same-origin that blocks those cross-origin loads.
+// Registered BEFORE secureHeaders so its post-response header-set runs afterward
+// (onion model) and wins for these asset routes only; API routes keep same-origin.
+app.use('/audio/*', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+app.use('/images/*', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+
 app.use('*', secureHeaders(__testBuildSecureHeadersOptions()));
 
 /**
