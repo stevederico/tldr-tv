@@ -49,5 +49,15 @@ SKATEBOARD_UI_EXTENSIONS_PROPOSAL.md
 # Kokoro TTS models + voice embeddings — downloaded on first run
 backend/tts/models/
 
-# Generated TTS audio (regenerable from transcripts via the TTS pipeline)
-backend/public/audio/
+# Generated TTS audio + Grok images — regenerable, not versioned.
+# Exception: the Paul Graham essay guides ship as demo/seed content (kept).
+backend/public/audio/*
+!backend/public/audio/good-writing-3.mp3
+!backend/public/audio/founder-mode.mp3
+!backend/public/audio/the-need-to-read.mp3
+!backend/public/audio/when-to-do-what-you-love.mp3
+!backend/public/audio/how-to-earn-a-billion-dollars.mp3
+backend/public/images/*
+!backend/public/images/good-writing-3
+!backend/public/images/founder-mode
+!backend/public/images/the-need-to-read

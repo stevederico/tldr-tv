@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.100.0
+
+  Keep PG essay media
+
 0.99.0
 
   Untrack generated audio
