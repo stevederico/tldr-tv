@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   isGuidePlayable,
   isGuideBuilding,
+  hasRunningGuideJobs,
   guideBuildError,
   type Guide,
 } from './playerUtils.ts';
@@ -44,6 +45,21 @@ describe('isGuideBuilding', () => {
     assert.equal(
       isGuideBuilding(guide({ jobs: { pipeline: { status: 'failed', error: 'boom' } } })),
       false
+    );
+  });
+});
+
+describe('hasRunningGuideJobs', () => {
+  it('is true when chapter-images still running even if playable', () => {
+    assert.equal(
+      hasRunningGuideJobs(
+        guide({
+          audio: '/a.mp3',
+          duration: 10,
+          jobs: { pipeline: { status: 'running' }, 'chapter-images': { status: 'running' } },
+        })
+      ),
+      true
     );
   });
 });

@@ -9,6 +9,7 @@ import {
   timeAtWordIndex,
   isGuidePlayable,
   isGuideBuilding,
+  hasRunningGuideJobs,
   guideBuildError,
 } from '../utils/playerUtils';
 import type { Guide, Chapter } from '../utils/playerUtils';
@@ -470,9 +471,19 @@ export default function PlayerView() {
     };
   }, [slug]);
 
-  // Poll while pipeline builds audio so extension deep-links become playable
+  // Poll while any job runs — audio can be ready before chapter images land
   useEffect(() => {
-    if (!guide || !isGuideBuilding(guide)) return;
+    if (!guide) return;
+    const needsPoll =
+      isGuideBuilding(guide) ||
+      hasRunningGuideJobs(guide) ||
+      // Playable but chapters still missing generated images (stale mid-pipeline open)
+      (isGuidePlayable(guide) &&
+        (guide.chapters?.length ?? 0) > 0 &&
+        guide.chapters!.some((c) => !c.image?.generated) &&
+        guide.jobs?.['chapter-images']?.status !== 'failed' &&
+        guide.jobs?.pipeline?.status !== 'done');
+    if (!needsPoll) return;
     const id = setInterval(() => {
       void refetchGuide();
     }, 2000);
@@ -866,7 +877,11 @@ export default function PlayerView() {
   const heroIdx = chapterImages.length > 0
     ? Math.floor(secondsInChapter / IMAGE_SWAP_SECONDS) % chapterImages.length
     : 0;
-  const heroSrc = resolveAsset(chapterImages[heroIdx] || '');
+  // Prefer chapter art; fall back to og/cover thumbnail so hero isn't pure black
+  // while images generate or if a chapter is missing a file.
+  const heroSrc = resolveAsset(
+    chapterImages[heroIdx] || guide.thumbnail || ''
+  );
   // Force split off on mobile — the side transcript pane is desktop-only;
   // mobile gets the full-width transcript tab in PlayerInfoPanel instead.
   const showSplit = splitTranscript && !!transcriptParas && !isMobile;

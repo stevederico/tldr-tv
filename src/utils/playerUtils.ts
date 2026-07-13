@@ -470,7 +470,19 @@ export function isGuidePlayable(g: Guide | null | undefined): boolean {
 }
 
 /**
- * True when the guide is still being built (pipeline/TTS) and not playable yet.
+ * True when any background job is still running (audio may already be playable
+ * while chapter images finish). Used for keep-polling, not for gating the player.
+ *
+ * @param g - Guide payload or null
+ * @returns Whether jobs are still in flight
+ */
+export function hasRunningGuideJobs(g: Guide | null | undefined): boolean {
+  if (!g?.jobs) return false;
+  return Object.values(g.jobs).some((j) => j?.status === 'running');
+}
+
+/**
+ * True when the guide is still being built and not playable yet (preparing UI).
  *
  * @param g - Guide payload or null
  * @returns Whether to show the preparing/skeleton state
@@ -478,10 +490,9 @@ export function isGuidePlayable(g: Guide | null | undefined): boolean {
 export function isGuideBuilding(g: Guide | null | undefined): boolean {
   if (!g || isGuidePlayable(g)) return false;
   if (g.jobs?.pipeline?.status === 'failed') return false;
-  if (g.jobs?.pipeline?.status === 'running') return true;
-  if (g.jobs?.tts?.status === 'running') return true;
+  if (hasRunningGuideJobs(g)) return true;
   if (!g.audio || !Number(g.duration)) return true;
-  return Object.values(g.jobs ?? {}).some((j) => j?.status === 'running');
+  return false;
 }
 
 /**
