@@ -26,6 +26,10 @@
 
   Fix PiP audio
 
+0.81.0
+
+  Add auto-gen publisher todo
+
 0.80.0
 
   Expand competitor research

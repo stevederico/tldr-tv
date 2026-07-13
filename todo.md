@@ -81,14 +81,38 @@ Only when multi-user / accounts matter (`noLogin: false`). Auth first; then Phas
 - [ ] No edit UI — `PUT /api/guides/:slug` + admin/owner edit modal
 - [ ] (Other create improvements listed above should be done in dev mode first)
 
-## P5 — Publisher widget (B2B)
+## P5 — Auto-generate + offer to publishers (B2B)
 
-After extension proves the product.
+After extension proves the product. Idea: don’t wait for a click — **pre-generate Watch versions of pages and offer them to the site** (player embed and/or downloadable MP4).
 
-- [ ] Embeddable "Watch this article" player (CNBC/Bloomberg Listen-style, but video/illustrated)
-- [ ] Script tag or iframe; publishers pass article URL or inline body
-- [ ] Same backend engine; branded shell + optional domain allowlist
-- [ ] B2B path after extension proves the product
+### Auto pipeline for public pages
+
+- [ ] Catalog / queue of target URLs (publisher sitemap, RSS, manual list, or trending open-web allowlist)
+- [ ] Worker: fetch article → same create pipeline (TTS + timings + beat images → optional mux MP4)
+- [ ] Dedupe by canonical URL / content hash so re-crawls don’t double-bill
+- [ ] Cost guard: max pages/day, max minutes audio, max images per domain; kill switch per publisher
+- [ ] Respect robots.txt, crawl-delay, and never bypass paywalls/login walls (same rules as extension)
+- [ ] Store `source_url`, publisher domain, generation status, public player URL, MP4 URL on each guide
+
+### Offer it to them automatically
+
+- [ ] Publisher outreach surface: “We already made a Watch version of this article” (email / dashboard / claim link)
+- [ ] Claim flow: domain verify (DNS TXT or meta tag) → attach guides to publisher account
+- [ ] One-click **embed**: script tag or iframe “Watch this article” (CNBC/Bloomberg Listen-style, but illustrated)
+- [ ] One-click **MP4 download** / host on their CMS (optional watermark-free after claim)
+- [ ] Optional auto-inject: if meta tag / partner script present, show Watch player without manual embed per post
+- [ ] Same backend engine; branded shell + domain allowlist
+
+### Product / legal guardrails
+
+- [ ] Clear rights model: generate only for open public pages; claim = license to embed; takedown path
+- [ ] Rate limits + auth on claim/embed token endpoints before any outbound “we made this for you”
+- [ ] B2B pricing sketch: free embed with badge vs paid white-label + MP4
+
+### Widget baseline (if offer path waits)
+
+- [ ] Embeddable player; publishers pass article URL or inline body
+- [ ] Script tag or iframe; optional domain allowlist
 
 ---
 
