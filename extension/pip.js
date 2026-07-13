@@ -71,6 +71,19 @@ let streamStarted = false;
 // src-setting branches would re-assign audio.src and restart from 0 (audible as
 // the audio "skipping" back to the start mid-listen).
 let playbackBegan = false;
+// User/system wants audio playing (vs intentionally paused). Autoplay and the
+// play button set true; pause button sets false. Rebuffer pauses must not clear
+// this — they resume when enough buffer is ahead again.
+let wantPlaying = false;
+// True while we deliberately paused to wait for more progressive-stream bytes.
+// Distinct from user pause so we auto-resume without fighting the play button.
+let rebuffering = false;
+/** Seconds of buffered audio required before the first autoplay on a live stream. */
+const MIN_START_BUFFER_SEC = 12;
+/** Seconds of headroom required before resuming after a rebuffer pause. */
+const MIN_RESUME_BUFFER_SEC = 8;
+/** If headroom falls below this while streaming, pause and rebuffer. */
+const REBUFFER_FLOOR_SEC = 1.5;
 
 // --- Captions + word highlighting (ported from the web PlayerView) ---
 /** Lead the highlight so the word lights as it is heard, not after. */
@@ -389,12 +402,77 @@ function flashFeedback(kind) {
   flashEl.classList.add('is-active');
 }
 
+/**
+ * Seconds of audio buffered ahead of the playhead. Progressive streams often
+ * report a single [0, end] range that grows as the HTTP tail delivers bytes.
+ *
+ * @param {HTMLAudioElement} audio
+ * @returns {number}
+ */
+function bufferedAhead(audio) {
+  const t = audio.currentTime || 0;
+  const b = audio.buffered;
+  try {
+    for (let i = 0; i < b.length; i++) {
+      if (b.start(i) <= t + 0.25 && b.end(i) > t) return b.end(i) - t;
+    }
+    // Live/chunked MP3 sometimes reports a range starting at 0 even mid-play.
+    if (b.length > 0 && b.start(0) <= 0.5) return Math.max(0, b.end(b.length - 1) - t);
+  } catch {
+    /* TimeRanges can throw if the element is mid-reload */
+  }
+  return 0;
+}
+
+/**
+ * Start or resume progressive-stream playback only when enough buffer exists.
+ * Prevents the classic "plays 2s → stalls → plays 2s" loop when the browser
+ * autoplays into an almost-empty progressive download.
+ */
+function pumpStreamPlayback() {
+  if (!(audioEl instanceof HTMLAudioElement) || !streamStarted) return;
+  const ahead = bufferedAhead(audioEl);
+
+  if (rebuffering) {
+    if (ahead >= MIN_RESUME_BUFFER_SEC && wantPlaying) {
+      rebuffering = false;
+      void audioEl.play().catch(() => {});
+    }
+    return;
+  }
+
+  // First start: wait for a solid lead so the playhead doesn't eat the
+  // still-generating frontier inside the first ~15s of listening.
+  if (!autoplayAttempted) {
+    if (ahead >= MIN_START_BUFFER_SEC) {
+      autoplayAttempted = true;
+      wantPlaying = true;
+      if (buildEl) buildEl.classList.add('is-hidden');
+      void audioEl.play().catch(() => {});
+    }
+    return;
+  }
+
+  // Mid-stream: if headroom collapses, pause and wait for more HTTP bytes.
+  if (wantPlaying && playbackBegan && ahead > 0 && ahead < REBUFFER_FLOOR_SEC && !audioEl.paused) {
+    rebuffering = true;
+    audioEl.pause();
+  }
+}
+
 function togglePlay() {
   if (!(audioEl instanceof HTMLAudioElement)) return;
   if (!audioEl.src || (playBtn instanceof HTMLButtonElement && playBtn.disabled)) return;
   const wasPaused = audioEl.paused;
-  if (wasPaused) void audioEl.play();
-  else audioEl.pause();
+  if (wasPaused) {
+    wantPlaying = true;
+    rebuffering = false;
+    void audioEl.play();
+  } else {
+    wantPlaying = false;
+    rebuffering = false;
+    audioEl.pause();
+  }
   flashFeedback(wasPaused ? 'play' : 'pause');
 }
 
@@ -434,21 +512,18 @@ function applyGuide(guide) {
   if (Number.isFinite(duration) && duration > 0) knownDuration = duration;
   const playable = audioPath.length > 0 && Number.isFinite(duration) && duration > 0;
   const ttsRunning = jobs.tts?.status === 'running';
-  // Wait for a small lead of rendered chunks before starting the progressive
-  // stream, so the playhead has buffer headroom and doesn't catch the still-
-  // generating frontier (which under-runs as an audible pause/rebuffer). Costs
-  // ~one extra chunk of startup latency for smoother playback.
-  // yagni: fixed 2-chunk lead; make it a seconds-of-audio margin if render
-  // speed varies enough that 2 chunks isn't a reliable buffer.
+  // Attach the progressive stream only after several chunks have landed on
+  // disk (backend now waits for MP3 flush before bumping chunksDone). Actual
+  // autoplay still waits for MIN_START_BUFFER_SEC of browser-buffered audio.
   const chunksDone = Number(jobs.tts?.chunksDone) || 0;
   const chunksTotal = Number(jobs.tts?.chunksTotal) || 0;
-  const leadReady = chunksDone >= 2 || (chunksTotal > 0 && chunksDone >= chunksTotal);
+  const leadReady = chunksDone >= 3 || (chunksTotal > 0 && chunksDone >= chunksTotal);
 
   if (streamStarted && audioEl instanceof HTMLAudioElement) {
-    // Already playing the progressive stream — it delivers the whole guide, so
-    // don't swap src (that would restart playback). Just keep the build hidden
-    // and stop polling once the pipeline is done.
-    if (buildEl) buildEl.classList.add('is-hidden');
+    // Already on the progressive stream — never swap src (that restarts at 0).
+    // Hide build once playback has actually started; otherwise keep "Buffering…".
+    if (autoplayAttempted && buildEl) buildEl.classList.add('is-hidden');
+    pumpStreamPlayback();
     if (pollId && jobs.pipeline?.status === 'done') {
       clearInterval(pollId);
       pollId = null;
@@ -466,6 +541,7 @@ function applyGuide(guide) {
 
     if (!autoplayAttempted) {
       autoplayAttempted = true;
+      wantPlaying = true;
       void audioEl.play().catch(() => {});
     }
 
@@ -474,19 +550,22 @@ function applyGuide(guide) {
       pollId = null;
     }
   } else if (ttsRunning && leadReady && audioEl instanceof HTMLAudioElement) {
-    // Audio isn't fully rendered yet, but the first chunk exists — start
-    // playing the progressive stream now so playback begins in ~1-2s.
+    // Point <audio> at the progressive stream, but do NOT play yet — wait for
+    // bufferedAhead >= MIN_START_BUFFER_SEC via progress/timeupdate. Playing
+    // into a near-empty progressive download is what caused stalls in <15s.
     streamStarted = true;
+    rebuffering = false;
     const src = `${apiBase}/api/guides/${encodeURIComponent(slug)}/stream.mp3`;
     audioEl.dataset.src = src;
+    audioEl.preload = 'auto';
     audioEl.src = src;
     audioEl.playbackRate = rate;
     if (playBtn instanceof HTMLButtonElement) playBtn.disabled = false;
-    if (buildEl) buildEl.classList.add('is-hidden');
-    if (!autoplayAttempted) {
-      autoplayAttempted = true;
-      void audioEl.play().catch(() => {});
-    }
+    // Keep the build overlay until pumpStreamPlayback has enough buffer to play
+    // — hides the "plays 2s then stalls" gap as a single "Buffering…" wait.
+    if (buildEl) buildEl.classList.remove('is-hidden');
+    if (buildStep) buildStep.textContent = 'Buffering audio…';
+    pumpStreamPlayback();
   } else if (buildEl) {
     buildEl.classList.remove('is-hidden');
   }
@@ -505,6 +584,8 @@ function tickTime() {
   const pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0;
   if (fillEl instanceof HTMLElement) fillEl.style.width = `${pct}%`;
   if (thumbEl instanceof HTMLElement) thumbEl.style.left = `${pct}%`;
+  // Drive progressive-stream start/rebuffer from the same tick as the timeline.
+  if (streamStarted) pumpStreamPlayback();
   // Keep captions in sync on seek / metadata / paused ticks (the rAF loop only
   // runs while playing).
   renderCaption();
@@ -629,12 +710,25 @@ async function init() {
     if (streamStarted && !playbackBegan) {
       streamStarted = false;
       autoplayAttempted = false;
+      rebuffering = false;
     }
+  });
+  // Browser ran out of progressive bytes — enter rebuffer (resume via pump).
+  audioEl?.addEventListener('waiting', () => {
+    if (streamStarted && wantPlaying && playbackBegan) rebuffering = true;
+  });
+  audioEl?.addEventListener('progress', () => {
+    if (streamStarted) pumpStreamPlayback();
+  });
+  audioEl?.addEventListener('canplay', () => {
+    if (streamStarted) pumpStreamPlayback();
   });
   audioEl?.addEventListener('timeupdate', tickTime);
   audioEl?.addEventListener('loadedmetadata', () => {
     tickTime();
-    if (autoplayAttempted && audioEl instanceof HTMLAudioElement && audioEl.paused) {
+    // Never force-play on metadata alone for live streams — pumpStreamPlayback
+    // gates on buffered headroom. Canonical-file path still autoplays above.
+    if (!streamStarted && autoplayAttempted && wantPlaying && audioEl instanceof HTMLAudioElement && audioEl.paused) {
       void audioEl.play().catch(() => {});
     }
   });

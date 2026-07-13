@@ -338,8 +338,11 @@ writes a single growing `<slug>.parts/stream.mp3`; this endpoint tails that file
 over a chunked-transfer response, holding the connection open and appending new
 bytes as they land. One encoder (not per-chunk MP3s concatenated) means no
 encoder-delay silence at chunk seams — gapless audio. The player starts within
-~1-2s instead of waiting for the whole render. Once the canonical `<slug>.mp3`
-exists, the endpoint `302`-redirects to it (Range-seekable).
+seconds (once several chunks have flushed to disk) instead of waiting for the
+whole render. The encoder waits for each chunk's MP3 bytes to land on disk
+before bumping `chunksDone`, so progress never races ahead of playable audio.
+Once the canonical `<slug>.mp3` exists, the endpoint `302`-redirects to it
+(Range-seekable).
 
 **Response:**
 - `200` — `audio/mpeg`, `Transfer-Encoding: chunked` (live render in progress)

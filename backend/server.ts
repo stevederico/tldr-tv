@@ -1685,12 +1685,46 @@ function readTtsState(partsDir: string): TtsStreamState | null {
 
 /** A continuous PCM→MP3 encoder writing to a single growing stream file. */
 interface TtsStreamEncoder {
-  /** Feed a chunk of 16-bit mono PCM; resolves once the write is buffered/drained. */
+  /**
+   * Feed a chunk of 16-bit mono PCM; resolves once stdin has accepted it AND
+   * the stream file on disk has grown to cover the cumulative audio so far
+   * (so `chunksDone` is never ahead of playable MP3 bytes).
+   */
   write: (pcm: Buffer) => Promise<void>;
   /** Close stdin and resolve once all MP3 output is flushed to the file. */
   end: () => Promise<void>;
   /** Hard-stop the subprocess (failure path). */
   kill: () => void;
+}
+
+/** 64kbps CBR mono ≈ 8000 bytes of MP3 per second of audio. */
+const MP3_BYTES_PER_SEC = 8000;
+/** Max time to wait for ffmpeg to flush one chunk's worth of MP3 to disk. */
+const ENCODER_FLUSH_TIMEOUT_MS = 8000;
+/** Poll interval while waiting for stream.mp3 to grow after a PCM write. */
+const ENCODER_FLUSH_POLL_MS = 40;
+
+/**
+ * Expected on-disk MP3 size for a cumulative PCM payload at 64kbps mono.
+ * Uses 85% of theoretical CBR size so a partial last frame doesn't hang the wait.
+ *
+ * @param pcmBytes - Total PCM bytes fed so far (16-bit mono)
+ * @param sampleRate - Sample rate of the PCM
+ * @returns Target file size in bytes (floored, 85% of CBR estimate)
+ */
+export function __testExpectedStreamMp3Bytes(pcmBytes: number, sampleRate: number): number {
+  if (pcmBytes <= 0 || sampleRate <= 0) return 0;
+  const durationSec = pcmBytes / 2 / sampleRate;
+  return Math.floor(durationSec * MP3_BYTES_PER_SEC * 0.85);
+}
+
+/** Best-effort file size; 0 when missing. */
+function streamFileSize(path: string): number {
+  try {
+    return statSync(path).size;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -1699,17 +1733,25 @@ interface TtsStreamEncoder {
  * `streamFile`. One encoder for the whole render means one encoder delay at the
  * very start, so there are no per-chunk seam gaps (the audible trip/pop).
  *
+ * Each `write()` waits until the on-disk file has grown to cover the cumulative
+ * PCM so far. Without that wait, `chunksDone` races ahead of playable bytes and
+ * the PiP starts playback into an almost-empty stream (stalls within seconds).
+ *
  * @param streamFile - Destination MP3 path (grows as chunks are fed)
  * @returns Encoder handle
  */
 function createTtsStreamEncoder(streamFile: string): TtsStreamEncoder {
   const ff = spawn('ffmpeg', [
     '-loglevel', 'error',
+    // Low-latency encode path so each chunk lands on disk soon after stdin write.
+    '-fflags', 'nobuffer',
     '-f', 's16le', '-ar', String(KOKORO_SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0',
     '-codec:a', 'libmp3lame', '-b:a', '64k', '-ac', '1',
+    '-flush_packets', '1',
     '-f', 'mp3', 'pipe:1',
   ]);
-  const out = createWriteStream(streamFile);
+  // Small buffer so pipe doesn't batch large encodes behind the flush wait.
+  const out = createWriteStream(streamFile, { highWaterMark: 16 * 1024 });
   ff.stdout.pipe(out);
   // Swallow all stream/process errors so a broken pipe (EPIPE when ffmpeg exits
   // or is killed) never bubbles to an unhandled 'error' event — which would be
@@ -1720,13 +1762,42 @@ function createTtsStreamEncoder(streamFile: string): TtsStreamEncoder {
   ff.stdin.on('error', () => {});
   ff.stdout.on('error', () => {});
   out.on('error', () => {});
+
+  /** Cumulative PCM bytes accepted on stdin (used to compute flush targets). */
+  let pcmWritten = 0;
+
+  /**
+   * Write PCM to ffmpeg stdin (backpressure-aware).
+   *
+   * @param pcm - 16-bit mono PCM
+   */
+  function writeStdin(pcm: Buffer): Promise<void> {
+    return new Promise((res) => {
+      if (!ff.stdin.writable) return res();
+      if (ff.stdin.write(pcm)) res();
+      else ff.stdin.once('drain', res);
+    });
+  }
+
+  /**
+   * Poll until stream.mp3 covers the cumulative PCM, or the timeout fires.
+   *
+   * @param targetBytes - Minimum on-disk size we need before resolving
+   */
+  async function waitForDisk(targetBytes: number): Promise<void> {
+    const deadline = Date.now() + ENCODER_FLUSH_TIMEOUT_MS;
+    while (streamFileSize(streamFile) < targetBytes && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, ENCODER_FLUSH_POLL_MS));
+    }
+  }
+
   return {
-    write: (pcm) =>
-      new Promise((res) => {
-        if (!ff.stdin.writable) return res();
-        if (ff.stdin.write(pcm)) res();
-        else ff.stdin.once('drain', res);
-      }),
+    write: async (pcm) => {
+      await writeStdin(pcm);
+      pcmWritten += pcm.length;
+      // Don't mark progress until playable bytes exist — PiP keys off chunksDone.
+      await waitForDisk(__testExpectedStreamMp3Bytes(pcmWritten, KOKORO_SAMPLE_RATE));
+    },
     end: () =>
       new Promise((res) => {
         out.on('close', () => res());

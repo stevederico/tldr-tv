@@ -89,6 +89,7 @@ const {
   shouldStartServer,
   __testStreamTailNext,
   __testShouldMergeStreamTiming,
+  __testExpectedStreamMp3Bytes,
 } = await import('./server.ts');
 
 // server.ts runs loadLocalENV() at import, which loads the app's backend/.env and can
@@ -1540,6 +1541,25 @@ describe('__testStreamTailNext (progressive stream tail loop)', () => {
   it('still flushes trailing bytes after done before ending', () => {
     // done=true but the consumer is behind (offset < size): keep going.
     assert.equal(__testStreamTailNext(4096, 8192, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
+  });
+});
+
+describe('__testExpectedStreamMp3Bytes (encoder flush target)', () => {
+  it('returns 0 for empty or invalid input', () => {
+    assert.equal(__testExpectedStreamMp3Bytes(0, 24000), 0);
+    assert.equal(__testExpectedStreamMp3Bytes(1000, 0), 0);
+  });
+
+  it('estimates ~85% of 64kbps CBR size for 1s of 24kHz mono PCM', () => {
+    // 1s @ 24kHz 16-bit mono = 48000 bytes PCM → 8000 * 0.85 = 6800 MP3 bytes
+    const pcm = 24000 * 2;
+    assert.equal(__testExpectedStreamMp3Bytes(pcm, 24000), 6800);
+  });
+
+  it('scales linearly with duration', () => {
+    const one = __testExpectedStreamMp3Bytes(24000 * 2, 24000);
+    const ten = __testExpectedStreamMp3Bytes(24000 * 2 * 10, 24000);
+    assert.equal(ten, one * 10);
   });
 });
 

@@ -6,6 +6,12 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.87.0
+
+  Flush stream encoder
+  Buffer before play
+  Rebuffer on stall
+
 0.86.0
 
   Larger captions icon
