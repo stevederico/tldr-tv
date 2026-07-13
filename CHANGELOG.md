@@ -6,6 +6,12 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.78.0
+
+  Prioritize open todos
+  Add Watch article
+  Convert todo checkboxes
+
 0.77.0
 
   Agnostic start script
