@@ -1838,15 +1838,20 @@ async function runChapterRealImagesJob(slug: string): Promise<void> {
  * Stages:
  *   1. parallel: analyze (author + summary + chapter outlines), thumbnail, tts
  *   2. attach chapter times (no API call) once words are available
- *   3. chapter-images (Grok Imagine). Unsplash real-images are no longer
- *      part of the default pipeline — generated is the only forward mode.
+ *   3. chapter-images (Grok Imagine) — skipped when opts.skipImages is set
+ *      (extension PiP uses blog photos as a slideshow instead).
  *
  * Errors in one branch do not abort other branches.
  *
- * @param {string} slug
+ * @param slug - Guide slug
+ * @param opts - Pipeline options
+ * @param opts.skipImages - When true, do not run Grok chapter-image generation
  * @returns {Promise<void>}
  */
-async function runFullPipeline(slug: string): Promise<void> {
+async function runFullPipeline(
+  slug: string,
+  opts: { skipImages?: boolean } = {}
+): Promise<void> {
   const pipeT0 = Date.now();
   await db.updateGuideJob(slug, 'pipeline', { status: 'running', startedAt: Date.now(), error: null });
 
@@ -1858,7 +1863,8 @@ async function runFullPipeline(slug: string): Promise<void> {
 
   const stageA = await Promise.allSettled([
     runAnalyzeStep(slug),
-    runThumbnailStep(slug),
+    // Thumbnail gen is also image spend — skip with skipImages (PiP has og/page art)
+    opts.skipImages ? Promise.resolve() : runThumbnailStep(slug),
     runTtsJobStaged(slug),
   ]);
   logStageOutcomes('stageA', slug, ['analyze', 'thumbnail', 'tts'], stageA);
@@ -1866,17 +1872,27 @@ async function runFullPipeline(slug: string): Promise<void> {
   // Chapter timing is a local quote-match against word timings — no API call.
   await runChapterTimingStep(slug);
 
-  const stageC = await Promise.allSettled([
-    runChapterImagesJobStaged(slug),
-  ]);
-  logStageOutcomes('stageC', slug, ['chapter-images'], stageC);
+  if (!opts.skipImages) {
+    const stageC = await Promise.allSettled([
+      runChapterImagesJobStaged(slug),
+    ]);
+    logStageOutcomes('stageC', slug, ['chapter-images'], stageC);
+  } else {
+    await db.updateGuideJob(slug, 'chapter-images', {
+      status: 'done',
+      ms: 0,
+      finishedAt: Date.now(),
+      skipped: true,
+      reason: 'skipImages',
+    }).catch(() => {});
+  }
 
   await db.updateGuideJob(slug, 'pipeline', {
     status: 'done',
     ms: Date.now() - pipeT0,
     finishedAt: Date.now(),
   });
-  logger.info('Pipeline complete', { slug, ms: Date.now() - pipeT0 });
+  logger.info('Pipeline complete', { slug, ms: Date.now() - pipeT0, skipImages: !!opts.skipImages });
 }
 
 function logStageOutcomes(stage: string, slug: string, names: string[], settled: PromiseSettledResult<unknown>[]): void {
@@ -2082,8 +2098,11 @@ app.post("/api/guides", async (c) => {
 
     logger.info('Guide created', { slug });
 
+    // Extension PiP sets skipImages to use blog photos instead of Grok art.
+    const skipImages = body.skipImages === true;
+
     // Backend orchestrates the rest. Fire-and-forget — FE polls GET /api/guides/:slug.
-    runFullPipeline(slug).catch(err => {
+    runFullPipeline(slug, { skipImages }).catch(err => {
       logger.error('Pipeline crashed', { slug, error: (err as Error).message });
     });
 

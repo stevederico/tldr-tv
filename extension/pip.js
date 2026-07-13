@@ -1,10 +1,6 @@
 /**
- * PiP video-style player — matches the in-app hero chrome as closely as a
- * lightweight extension page can (no React bundle).
- *
- * - Blog page images first, then generated chapter art
- * - Autoplay when audio is ready
- * - Progress bar while audio / images generate
+ * PiP player: blog-image slideshow + audio, PlayerView-style chrome.
+ * No generated images — page photos only (skipImages on create).
  */
 import { getConfig } from './config.js';
 
@@ -12,6 +8,7 @@ const params = new URLSearchParams(location.search);
 const slug = params.get('slug') || '';
 
 const root = document.getElementById('root');
+const heroEl = document.getElementById('hero');
 const coverEl = document.getElementById('cover');
 const blurEl = document.getElementById('blur');
 const buildEl = document.getElementById('build');
@@ -23,7 +20,11 @@ const buildPct = document.getElementById('buildPct');
 const playBtn = document.getElementById('play');
 const iconPlay = document.getElementById('iconPlay');
 const iconPause = document.getElementById('iconPause');
-const openBtn = document.getElementById('open');
+const fsBtn = document.getElementById('fsBtn');
+const iconExpand = document.getElementById('iconExpand');
+const iconCompress = document.getElementById('iconCompress');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsMenu = document.getElementById('settingsMenu');
 const timeEl = document.getElementById('time');
 const fillEl = document.getElementById('fill');
 const thumbEl = document.getElementById('thumb');
@@ -31,15 +32,9 @@ const timelineEl = document.getElementById('timeline');
 const audioEl = document.getElementById('audio');
 
 /** @type {string} */
-let appBase = 'http://localhost:5173';
-/** @type {string} */
 let apiBase = 'http://localhost:8000';
 /** @type {string[]} */
 let pageImages = [];
-/** @type {string[]} */
-let generatedImages = [];
-/** @type {string[]} */
-let gallery = [];
 let galleryIdx = 0;
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollId = null;
@@ -47,6 +42,7 @@ let pollId = null;
 let galleryTimer = null;
 let autoplayAttempted = false;
 let scrubbing = false;
+let rate = 1;
 
 /**
  * @param {number} sec
@@ -84,47 +80,26 @@ function setHero(url) {
   }
 }
 
-function rebuildGallery() {
-  /** @type {string[]} */
-  const next = [];
-  /** @type {Set<string>} */
-  const seen = new Set();
-  for (const u of [...generatedImages, ...pageImages]) {
-    const abs = assetUrl(u);
-    if (!abs || seen.has(abs)) continue;
-    seen.add(abs);
-    next.push(abs);
-  }
-  gallery = next;
-  if (gallery.length && !gallery.includes(coverEl instanceof HTMLImageElement ? coverEl.src : '')) {
-    galleryIdx = 0;
-    setHero(gallery[0]);
-  } else if (gallery.length && coverEl instanceof HTMLImageElement && !coverEl.src) {
-    setHero(gallery[0]);
-  }
-}
-
-function startGalleryRotation() {
+function startSlideshow() {
   if (galleryTimer) clearInterval(galleryTimer);
-  if (gallery.length < 2) return;
+  if (pageImages.length === 0) return;
+  setHero(pageImages[galleryIdx % pageImages.length]);
+  if (pageImages.length < 2) return;
   galleryTimer = setInterval(() => {
-    if (scrubbing) return;
-    galleryIdx = (galleryIdx + 1) % gallery.length;
-    setHero(gallery[galleryIdx]);
-  }, 10000);
+    galleryIdx = (galleryIdx + 1) % pageImages.length;
+    setHero(pageImages[galleryIdx]);
+  }, 8000);
 }
 
 /**
- * Weighted build progress: analyze 10%, tts 55%, chapter-images 35%.
+ * Progress without image generation (analyze + tts only).
  *
  * @param {Record<string, { status?: string, chunksDone?: number, chunksTotal?: number, error?: string } | undefined>} jobs
- * @returns {{ pct: number, step: string }}
  */
 function buildProgress(jobs) {
   const stages = [
-    { key: 'analyze', weight: 10, label: 'Analyzing article…' },
-    { key: 'tts', weight: 55, label: 'Generating audio…' },
-    { key: 'chapter-images', weight: 35, label: 'Generating images…' },
+    { key: 'analyze', weight: 25, label: 'Analyzing article…' },
+    { key: 'tts', weight: 75, label: 'Generating audio…' },
   ];
   let pct = 0;
   let step = 'Starting…';
@@ -140,9 +115,9 @@ function buildProgress(jobs) {
       if (j.chunksTotal && j.chunksTotal > 0) {
         const frac = Math.min(1, (j.chunksDone ?? 0) / j.chunksTotal);
         pct += s.weight * frac;
-        step = `${s.label.replace('…', '')} (${j.chunksDone ?? 0}/${j.chunksTotal})`;
+        step = `Generating audio (${j.chunksDone ?? 0}/${j.chunksTotal})`;
       } else {
-        pct += s.weight * 0.15;
+        pct += s.weight * 0.2;
       }
       break;
     }
@@ -161,6 +136,13 @@ function buildProgress(jobs) {
   return { pct: Math.round(Math.min(100, pct)), step };
 }
 
+function togglePlay() {
+  if (!(audioEl instanceof HTMLAudioElement)) return;
+  if (!audioEl.src || (playBtn instanceof HTMLButtonElement && playBtn.disabled)) return;
+  if (audioEl.paused) void audioEl.play();
+  else audioEl.pause();
+}
+
 /**
  * @param {unknown} guide
  */
@@ -172,30 +154,15 @@ function applyGuide(guide) {
     buildTitle.textContent = g.title;
   }
 
+  // Prefer blog images; fall back to og thumbnail from guide if storage empty
+  if (pageImages.length === 0 && typeof g.thumbnail === 'string' && g.thumbnail) {
+    pageImages = [g.thumbnail];
+    startSlideshow();
+  }
+
   const jobs = /** @type {Record<string, { status?: string, chunksDone?: number, chunksTotal?: number, error?: string } | undefined>} */ (
     g.jobs || {}
   );
-
-  // Generated chapter images
-  generatedImages = [];
-  if (Array.isArray(g.chapters)) {
-    for (const ch of g.chapters) {
-      if (!ch || typeof ch !== 'object') continue;
-      const img = /** @type {Record<string, unknown>} */ (ch).image;
-      if (img && typeof img === 'object') {
-        const gen = /** @type {Record<string, unknown>} */ (img).generated;
-        if (typeof gen === 'string' && gen) generatedImages.push(gen);
-      }
-      const real = /** @type {Record<string, unknown>} */ (ch).realImage;
-      if (typeof real === 'string' && real) generatedImages.push(real);
-    }
-  }
-  if (typeof g.thumbnail === 'string' && g.thumbnail) {
-    pageImages = [g.thumbnail, ...pageImages.filter((u) => u !== g.thumbnail)];
-  }
-  rebuildGallery();
-  startGalleryRotation();
-
   const { pct, step } = buildProgress(jobs);
   if (buildBar instanceof HTMLElement) buildBar.style.width = `${pct}%`;
   if (buildBarWrap) buildBarWrap.setAttribute('aria-valuenow', String(pct));
@@ -211,22 +178,22 @@ function applyGuide(guide) {
     if (audioEl.dataset.src !== src) {
       audioEl.dataset.src = src;
       audioEl.src = src;
+      audioEl.playbackRate = rate;
     }
     if (playBtn instanceof HTMLButtonElement) playBtn.disabled = false;
-
-    // Hide build overlay once audio can play (images may still stream in)
     if (buildEl) buildEl.classList.add('is-hidden');
 
     if (!autoplayAttempted) {
       autoplayAttempted = true;
-      void audioEl.play().catch(() => {
-        // Autoplay blocked until user gesture — controls stay visible via data-paused
-      });
+      void audioEl.play().catch(() => {});
     }
 
-    if (pollId && jobs.pipeline?.status === 'done') {
-      clearInterval(pollId);
-      pollId = null;
+    if (pollId && (jobs.pipeline?.status === 'done' || jobs.tts?.status === 'done')) {
+      // Keep a short poll until pipeline done, then stop
+      if (jobs.pipeline?.status === 'done') {
+        clearInterval(pollId);
+        pollId = null;
+      }
     }
   } else if (buildEl) {
     buildEl.classList.remove('is-hidden');
@@ -259,18 +226,37 @@ function seekFromClientX(clientX) {
   }
 }
 
+function setSettingsOpen(open) {
+  if (!(settingsMenu instanceof HTMLElement) || !(settingsBtn instanceof HTMLButtonElement)) return;
+  settingsMenu.hidden = !open;
+  settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function syncRateMenu() {
+  document.querySelectorAll('.menu-item[data-rate]').forEach((btn) => {
+    if (!(btn instanceof HTMLElement)) return;
+    const r = Number(btn.getAttribute('data-rate'));
+    btn.classList.toggle('is-active', r === rate);
+  });
+}
+
 async function loadPipContext() {
   try {
     const res = await chrome.runtime.sendMessage({ type: 'GET_PIP_CONTEXT', slug });
     if (res?.ok && Array.isArray(res.pageImages)) {
-      pageImages = res.pageImages.filter((u) => typeof u === 'string');
-      rebuildGallery();
-      if (gallery[0]) setHero(gallery[0]);
-      startGalleryRotation();
+      pageImages = res.pageImages.filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
+      startSlideshow();
     }
   } catch {
-    // storage optional
+    /* optional */
   }
+}
+
+function updateFsIcons() {
+  const fs = !!document.fullscreenElement;
+  if (iconExpand) iconExpand.hidden = fs;
+  if (iconCompress) iconCompress.hidden = !fs;
+  if (fsBtn) fsBtn.setAttribute('aria-label', fs ? 'Exit full screen' : 'Full screen');
 }
 
 async function init() {
@@ -281,16 +267,14 @@ async function init() {
 
   const cfg = await getConfig();
   apiBase = cfg.apiBase;
-  appBase = cfg.appBase;
 
   await loadPipContext();
 
   try {
-    applyGuide(await (await fetch(`${apiBase}/api/guides/${encodeURIComponent(slug)}`)).json());
+    const res = await fetch(`${apiBase}/api/guides/${encodeURIComponent(slug)}`);
+    applyGuide(await res.json());
   } catch (err) {
-    if (buildStep) {
-      buildStep.textContent = err instanceof Error ? err.message : String(err);
-    }
+    if (buildStep) buildStep.textContent = err instanceof Error ? err.message : String(err);
   }
 
   pollId = setInterval(() => {
@@ -300,31 +284,30 @@ async function init() {
       .catch(() => {});
   }, 1500);
 
-  playBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!(audioEl instanceof HTMLAudioElement) || playBtn instanceof HTMLButtonElement && playBtn.disabled) return;
-    if (audioEl.paused) void audioEl.play();
-    else audioEl.pause();
+  // Click anywhere on hero toggles play (except controls / settings)
+  heroEl?.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (t.closest('[data-overlay]')) return;
+    if (t.closest('.menu')) return;
+    togglePlay();
   });
 
-  // Click hero toggles play (like main player)
-  document.getElementById('hero')?.addEventListener('click', (e) => {
-    const t = e.target;
-    if (t instanceof Element && t.closest('[data-overlay]')) return;
-    if (t instanceof Element && t.closest('.build') && !buildEl?.classList.contains('is-hidden')) return;
-    playBtn?.click();
+  playBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePlay();
   });
 
   audioEl?.addEventListener('play', () => {
     root?.setAttribute('data-paused', 'false');
-    iconPlay && (iconPlay.hidden = true);
-    iconPause && (iconPause.hidden = false);
+    if (iconPlay) iconPlay.hidden = true;
+    if (iconPause) iconPause.hidden = false;
     if (playBtn) playBtn.setAttribute('aria-label', 'Pause');
   });
   audioEl?.addEventListener('pause', () => {
     root?.setAttribute('data-paused', 'true');
-    iconPlay && (iconPlay.hidden = false);
-    iconPause && (iconPause.hidden = true);
+    if (iconPlay) iconPlay.hidden = false;
+    if (iconPause) iconPause.hidden = true;
     if (playBtn) playBtn.setAttribute('aria-label', 'Play');
   });
   audioEl?.addEventListener('timeupdate', tickTime);
@@ -336,6 +319,7 @@ async function init() {
   });
 
   timelineEl?.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
     scrubbing = true;
     seekFromClientX(e.clientX);
     const onMove = (ev) => seekFromClientX(ev.clientX);
@@ -348,10 +332,48 @@ async function init() {
     document.addEventListener('pointerup', onUp);
   });
 
-  openBtn?.addEventListener('click', (e) => {
+  // Settings (speed) — same control surface as PlayerView gear
+  settingsBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    window.open(`${appBase}/app/${encodeURIComponent(slug)}`, '_blank', 'noopener,noreferrer');
+    const open = settingsMenu?.hidden !== false;
+    setSettingsOpen(open);
+    syncRateMenu();
   });
+
+  settingsMenu?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    const r = Number(t.getAttribute('data-rate'));
+    if (!Number.isFinite(r)) return;
+    rate = r;
+    if (audioEl instanceof HTMLAudioElement) audioEl.playbackRate = rate;
+    syncRateMenu();
+    setSettingsOpen(false);
+  });
+
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t instanceof Element && t.closest('.menu-wrap')) return;
+    setSettingsOpen(false);
+  });
+
+  // Fullscreen icon — fullscreen the PiP document (iframe)
+  fsBtn?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // iframe may need allowfullscreen from parent — content.js sets allow
+    }
+    updateFsIcons();
+  });
+  document.addEventListener('fullscreenchange', updateFsIcons);
+  syncRateMenu();
 }
 
 void init();

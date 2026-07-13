@@ -90,7 +90,9 @@
     const frame = document.createElement('iframe');
     frame.src = chrome.runtime.getURL(`pip.html?slug=${encodeURIComponent(slug)}`);
     frame.title = 'Watch this article player';
-    frame.allow = 'autoplay';
+    frame.allow = 'autoplay; fullscreen';
+    frame.setAttribute('allowfullscreen', 'true');
+
     Object.assign(frame.style, {
       border: '0',
       width: '100%',

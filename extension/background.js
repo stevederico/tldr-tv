@@ -26,6 +26,8 @@ async function createGuide(article) {
       sourceUrl: article.sourceUrl || null,
       date: article.date || null,
       thumbnail: article.thumbnail || null,
+      // PiP slideshow uses blog photos — don't spend Grok image budget
+      skipImages: true,
     }),
   });
 
