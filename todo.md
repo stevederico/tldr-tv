@@ -1,12 +1,10 @@
 # Todo
 
-- [ ] export as video
+Priority order: top = do next. Same engine for everything; shells and polish stack on it.
 
-## Watch this article
+## P0 — Watch this article (browser extension)
 
-Open-web "Listen mode with pictures" — same pipeline (extract → TTS → images → player); two shells.
-
-### Browser extension (first)
+Wedge: open-web “Listen mode with pictures.” Extension first; widget is P5.
 
 - [ ] Chrome MV3: content script extracts readable article (title, author, body) from current page
 - [ ] Selection fallback on hard/paywalled sites — only what the user can already see/select
@@ -14,14 +12,37 @@ Open-web "Listen mode with pictures" — same pipeline (extract → TTS → imag
 - [ ] Toolbar action: "Watch this article"
 - [ ] Never bypass paywalls / login walls
 
-### Publisher widget (later)
+## P1 — Make it feel like “watch” (not just listen)
 
-- [ ] Embeddable "Watch this article" player (CNBC/Bloomberg Listen-style, but video/illustrated)
-- [ ] Script tag or iframe; publishers pass article URL or inline body
-- [ ] Same backend engine; branded shell + optional domain allowlist
-- [ ] B2B path after extension proves the product
+Depends on solid player; unlocks the “video” story without requiring publisher deals.
 
-## Import EPUB
+- [ ] Move from 1 hero image per chapter to a timed sequence — multiple images that swap as the audio plays through the chapter
+- [ ] Schema: `chapter.images: [{ src, time, caption?, alt? }]` (sorted by `time`); keep `realImage` / generated single-image as fallback
+- [ ] Image generation: split chapter transcript into N beats (sentence clusters or every ~20s of audio), generate one image per beat via xAI Grok Imagine (`grok-imagine-image-quality`) with prompt = beat text + author/style anchor
+- [ ] Real-image variant: run Unsplash/Pexels search per beat instead of per chapter
+- [ ] PlayerView: pick current image by binary-searching `images[]` against `currentTime`; crossfade between images (`transition-opacity`, not `transition-all`)
+- [ ] Caption overlay: optionally show `image.caption` when it changes (debounced so quick swaps don't flash text)
+- [ ] Ken Burns / subtle zoom on the active image so static images don't feel dead — respect `prefers-reduced-motion`
+- [ ] Storage layout: `/images/<slug>/beats/<chapter-idx>/<beat-idx>.webp` to keep chapter scoping intact
+- [ ] Backend: extend `/api/guides/:slug/chapter-images` to accept `beatsPerChapter` or auto-derive from chapter duration; concurrency cap stays
+- [ ] Cost guard: cap total images per guide (e.g. 60) so a long book doesn't blow the image budget; surface count in create flow
+- [ ] export as video (mux illustrated audio → shareable MP4)
+- [ ] slow scroller like a script next to a movie https://www.youtube.com/watch?v=kunUvYIJtHM
+- [ ] Player hero + caption overlay: stack vertically on mobile, ensure hero image scales to viewport width without cropping the caption
+- [ ] Test on iOS Safari — audio autoplay restrictions, range request streaming, background playback
+
+## P2 — Hardening before open-web abuse
+
+Do before (or in parallel with late) public extension traffic.
+
+- [ ] Rate limiter on create / pipeline endpoints
+- [ ] Add unit tests in `backend/server.test.ts` covering slug validation, duplicate handling, audio upload errors, transcript round-trips
+- [ ] Move audio/images off local disk (persistent volume)
+- [ ] Proper backup strategy for SQLite + assets
+
+## P3 — More source types (EPUB)
+
+Same payload shape as URL import; not on the critical path for Watch.
 
 - [ ] New source type in create modal alongside URL / paste: "Upload EPUB" (`.epub` file picker)
 - [ ] Backend: `POST /api/import/epub` accepts multipart upload, parses with a zero-dep approach (EPUB is a zip of XHTML + OPF manifest) — unzip, read `META-INF/container.xml` → `.opf` → spine order
@@ -34,36 +55,18 @@ Open-web "Listen mode with pictures" — same pipeline (extract → TTS → imag
 - [ ] Size + rate limits: cap upload at ~50MB, reject non-EPUB MIME, sanitize XHTML before storing (strip scripts)
 - [ ] Stretch: detect DRM (Adobe ADEPT, Apple FairPlay) and surface a clear error — those can't be parsed
 
-## More visuals per chapter
+## P4 — Auth + per-user state
 
-- [ ] Move from 1 hero image per chapter to a timed sequence — multiple images that swap as the audio plays through the chapter
-- [ ] Schema: `chapter.images: [{ src, time, caption?, alt? }]` (sorted by `time`); keep `realImage` / generated single-image as fallback
-- [ ] Image generation: split chapter transcript into N beats (sentence clusters or every ~20s of audio), generate one image per beat via xAI Grok Imagine (`grok-imagine-image-quality`) with prompt = beat text + author/style anchor
-- [ ] Real-image variant: run Unsplash/Pexels search per beat instead of per chapter
-- [ ] PlayerView: pick current image by binary-searching `images[]` against `currentTime`; crossfade between images (`transition-opacity`, not `transition-all`)
-- [ ] Caption overlay: optionally show `image.caption` when it changes (debounced so quick swaps don't flash text)
-- [ ] Ken Burns / subtle zoom on the active image so static images don't feel dead — respect `prefers-reduced-motion`
-- [ ] Storage layout: `/images/<slug>/beats/<chapter-idx>/<beat-idx>.webp` to keep chapter scoping intact
-- [ ] Backend: extend `/api/guides/:slug/chapter-images` to accept `beatsPerChapter` or auto-derive from chapter duration; concurrency cap stays
-- [ ] Cost guard: cap total images per guide (e.g. 60) so a long book doesn't blow the image budget; surface count in create flow
+Only when multi-user / accounts matter (`noLogin: false`). Auth first; then Phase 4.
 
-## Mobile formatting
-
-- [ ] Player hero + caption overlay: stack vertically on mobile, ensure hero image scales to viewport width without cropping the caption
-- [ ] Test on iOS Safari — audio autoplay restrictions, range request streaming, background playback
-
-## Future — Auth + Per-user State
-
-Everything below only becomes relevant once auth is enabled (`noLogin: false`, real user accounts, write gating).
-
-## Auth (do first — blocks Phase 4)
+### Auth (blocks Phase 4)
 
 - [ ] Gate write routes — `POST /api/guides`, `POST /api/guides/:slug/audio`, future `PUT`/`DELETE` — behind `authMiddleware` + `csrfProtection`
 - [ ] Decide whether `GET /api/guides` and `GET /api/guides/:slug` should also require sign-in, or stay public
 - [ ] Wrap the create button + modal in `LibraryView` so anonymous users see a sign-in prompt instead of an open form
 - [ ] Surface auth failures from `apiRequest` as toasts in the modal
 
-## Phase 4 — Per-user state (depends on auth)
+### Phase 4 — Per-user state (depends on auth)
 
 - [ ] Schema: add `UserProgress(user_id, guide_slug, position_sec, updated_at)` and `UserLibrary(user_id, guide_slug, added_at)` tables + composite PKs in `backend/adapters/sqlite`
 - [ ] Adapter methods + routes for progress and library (all auth + CSRF where mutating)
@@ -72,24 +75,19 @@ Everything below only becomes relevant once auth is enabled (`noLogin: false`, r
 - [ ] `LibraryView`: "Save to library" + filtering by personal library
 - [ ] Graceful degradation for anonymous users
 
-## Create flow gaps (when auth is on)
+### Create flow gaps (when auth is on)
 
 - [ ] No edit UI — `PUT /api/guides/:slug` + admin/owner edit modal
 - [ ] (Other create improvements listed above should be done in dev mode first)
 
-## Backend hardening
+## P5 — Publisher widget (B2B)
 
-- [ ] Add unit tests in `backend/server.test.ts` covering slug validation, duplicate handling, audio upload errors, transcript round-trips
-- [ ] Rate limiter on create endpoints (can be done now)
+After extension proves the product.
 
-## Production storage
-
-- [ ] Move audio/images off local disk (persistent volume)
-- [ ] Proper backup strategy for SQLite + assets
-
-## Misc
-
-- [ ] slow scroller like a script next to a movie https://www.youtube.com/watch?v=kunUvYIJtHM
+- [ ] Embeddable "Watch this article" player (CNBC/Bloomberg Listen-style, but video/illustrated)
+- [ ] Script tag or iframe; publishers pass article URL or inline body
+- [ ] Same backend engine; branded shell + optional domain allowlist
+- [ ] B2B path after extension proves the product
 
 ---
 
@@ -152,12 +150,10 @@ Landed in 0.47.0 (orchestration + Grok + Kokoro wiring) and 0.55.0 (TTS coarticu
 - [x] db.updateGuideJob(slug, step, jobState) using BEGIN IMMEDIATE / COMMIT (Node DatabaseSync has no .transaction())
 - [x] ALTER TABLE backfill guarded with try/catch for existing DBs
 
-### H. Hardening (rate limit + endpoint tests still open above)
+### H. Hardening (partial)
 
 - [x] AbortController timeouts: 60s on Grok text, 90s per image, 10min on TTS
 - [x] Cache-bust audio URL via ?v=updatedAt query
-- [ ] Rate limiting deferred — user explicitly said "no rate limiter we are in development!"
-- [ ] Endpoint tests deferred
 
 ## Mobile formatting (responsive pass)
 
