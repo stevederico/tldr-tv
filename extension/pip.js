@@ -20,11 +20,15 @@ const buildPct = document.getElementById('buildPct');
 const playBtn = document.getElementById('play');
 const iconPlay = document.getElementById('iconPlay');
 const iconPause = document.getElementById('iconPause');
+const openBtn = document.getElementById('openBtn');
 const fsBtn = document.getElementById('fsBtn');
 const iconExpand = document.getElementById('iconExpand');
 const iconCompress = document.getElementById('iconCompress');
 const settingsBtn = document.getElementById('settingsBtn');
 const settingsMenu = document.getElementById('settingsMenu');
+
+/** @type {string} */
+let appBase = 'http://localhost:5173';
 const timeEl = document.getElementById('time');
 const fillEl = document.getElementById('fill');
 const thumbEl = document.getElementById('thumb');
@@ -33,6 +37,7 @@ const audioEl = document.getElementById('audio');
 
 /** @type {string} */
 let apiBase = 'http://localhost:8000';
+// appBase set in init()
 /** @type {string[]} */
 let pageImages = [];
 let galleryIdx = 0;
@@ -254,9 +259,12 @@ async function loadPipContext() {
 
 function updateFsIcons() {
   const fs = !!document.fullscreenElement;
-  if (iconExpand) iconExpand.hidden = fs;
-  if (iconCompress) iconCompress.hidden = !fs;
-  if (fsBtn) fsBtn.setAttribute('aria-label', fs ? 'Exit full screen' : 'Full screen');
+  iconExpand?.classList.toggle('is-hidden', fs);
+  iconCompress?.classList.toggle('is-hidden', !fs);
+  if (fsBtn) {
+    fsBtn.setAttribute('aria-label', fs ? 'Exit full screen' : 'Full screen');
+    fsBtn.title = fs ? 'Exit full screen' : 'Full screen';
+  }
 }
 
 async function init() {
@@ -267,8 +275,11 @@ async function init() {
 
   const cfg = await getConfig();
   apiBase = cfg.apiBase;
+  appBase = cfg.appBase;
 
   await loadPipContext();
+  iconPause?.classList.add('is-hidden');
+  iconCompress?.classList.add('is-hidden');
 
   try {
     const res = await fetch(`${apiBase}/api/guides/${encodeURIComponent(slug)}`);
@@ -300,14 +311,14 @@ async function init() {
 
   audioEl?.addEventListener('play', () => {
     root?.setAttribute('data-paused', 'false');
-    if (iconPlay) iconPlay.hidden = true;
-    if (iconPause) iconPause.hidden = false;
+    iconPlay?.classList.add('is-hidden');
+    iconPause?.classList.remove('is-hidden');
     if (playBtn) playBtn.setAttribute('aria-label', 'Pause');
   });
   audioEl?.addEventListener('pause', () => {
     root?.setAttribute('data-paused', 'true');
-    if (iconPlay) iconPlay.hidden = false;
-    if (iconPause) iconPause.hidden = true;
+    iconPlay?.classList.remove('is-hidden');
+    iconPause?.classList.add('is-hidden');
     if (playBtn) playBtn.setAttribute('aria-label', 'Play');
   });
   audioEl?.addEventListener('timeupdate', tickTime);
@@ -358,7 +369,13 @@ async function init() {
     setSettingsOpen(false);
   });
 
-  // Fullscreen icon — fullscreen the PiP document (iframe)
+  // External-link icon → full web player in a new tab
+  openBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.open(`${appBase}/app/${encodeURIComponent(slug)}`, '_blank', 'noopener,noreferrer');
+  });
+
+  // Fullscreen corners icon → fullscreen this PiP only
   fsBtn?.addEventListener('click', async (e) => {
     e.stopPropagation();
     try {
@@ -368,12 +385,13 @@ async function init() {
         await document.exitFullscreen();
       }
     } catch {
-      // iframe may need allowfullscreen from parent — content.js sets allow
+      // allowfullscreen on iframe required
     }
     updateFsIcons();
   });
   document.addEventListener('fullscreenchange', updateFsIcons);
   syncRateMenu();
+  updateFsIcons();
 }
 
 void init();

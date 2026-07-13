@@ -212,6 +212,12 @@ body {
   color: var(--accent-hot);
 }
 
+/* SVG `hidden` attr is unreliable — use a class */
+.icon-btn svg.is-hidden,
+.fs-icon.is-hidden {
+  display: none !important;
+}
+
 .time {
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
