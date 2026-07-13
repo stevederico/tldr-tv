@@ -6,6 +6,12 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.102.0
+
+  Fix contrast tokens
+  Cobalt brand accent
+  Add design fonts
+
 0.101.0
 
   Stricter image gate

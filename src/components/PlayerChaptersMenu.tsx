@@ -16,7 +16,7 @@ const CHAPTER_ROW_CLS =
 const CHAPTER_ROW_CLS_MOBILE = `${CHAPTER_ROW_CLS} min-h-[44px]`;
 
 const CHAPTER_TIME_CLS =
-  "text-muted-foreground text-[0.8rem] tabular-nums shrink-0 min-w-[48px] group-data-[active]/chapter:text-[var(--accent-hot)]";
+  "text-muted-foreground text-[0.8rem] tabular-nums shrink-0 min-w-[48px] group-data-[active]/chapter:text-[var(--brand-hot)]";
 
 const CHAPTER_TITLE_CLS = "flex-1 min-w-0 whitespace-normal leading-[1.35]";
 

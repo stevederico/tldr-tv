@@ -63,3 +63,6 @@ backend/public/images/*
 !backend/public/images/the-need-to-read
 !backend/public/images/when-to-do-what-you-love
 !backend/public/images/how-to-earn-a-billion-dollars
+
+# Design exploration mockups (throwaway)
+mockups/

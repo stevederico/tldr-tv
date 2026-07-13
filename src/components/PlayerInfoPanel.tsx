@@ -102,9 +102,9 @@ export default function PlayerInfoPanel({
                 key={i}
                 data-active={isActive || undefined}
                 onClick={() => jumpToChapter(c, i)}
-                className="group/chapter flex items-center gap-3.5 py-3 px-3 bg-transparent border-none border-l-2 border-l-transparent cursor-pointer transition-[background-color,border-color,padding-left] duration-150 text-[0.92rem] font-medium w-full text-left text-foreground rounded hover:bg-card hover:pl-4 data-[active]:bg-muted data-[active]:border-l-[var(--accent)]"
+                className="group/chapter flex items-center gap-3.5 py-3 px-3 bg-transparent border-none border-l-2 border-l-transparent cursor-pointer transition-[background-color,border-color,padding-left] duration-150 text-[0.92rem] font-medium w-full text-left text-foreground rounded hover:bg-card hover:pl-4 data-[active]:bg-muted data-[active]:border-l-[var(--brand)]"
               >
-                <div className="font-['Manrope',system-ui,sans-serif] tabular-nums font-semibold text-muted-foreground w-[46px] shrink-0 text-[0.78rem] tracking-[0.02em] group-data-[active]/chapter:text-[var(--accent)]">
+                <div className="font-['Manrope',system-ui,sans-serif] tabular-nums font-semibold text-muted-foreground w-[46px] shrink-0 text-[0.78rem] tracking-[0.02em] group-data-[active]/chapter:text-[var(--brand)]">
                   {fmt(c.time)}
                 </div>
                 <div className="flex-1 tracking-[-0.005em] group-data-[active]/chapter:font-bold">{c.title}</div>
@@ -131,7 +131,7 @@ export default function PlayerInfoPanel({
             value={notes}
             onChange={e => updateNotes(e.target.value)}
             aria-label="Notes for this guide"
-            className="w-full min-h-[320px] resize-y bg-card text-foreground border border-border rounded-xl py-3.5 px-4 font-['Manrope',system-ui,sans-serif] text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--accent)] focus:bg-muted"
+            className="w-full min-h-[320px] resize-y bg-card text-foreground border border-border rounded-xl py-3.5 px-4 font-['Manrope',system-ui,sans-serif] text-base leading-relaxed outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
           />
         </div>
       )}

@@ -971,7 +971,7 @@ export default function PlayerView() {
               >
                 <div
                   style={{ width: pct + '%' }}
-                  className="absolute left-0 top-0 h-full bg-[var(--accent)] shadow-[0_0_8px_rgba(var(--accent-glow),0.5)]"
+                  className="absolute left-0 top-0 h-full bg-[var(--brand)] shadow-[0_0_8px_rgba(var(--brand-glow),0.5)]"
                 />
                 <div className="absolute top-0 left-0 right-0 h-full pointer-events-none z-[11]">
                   {chapters.map((c, i) => (
@@ -1007,7 +1007,7 @@ export default function PlayerView() {
                 </div>
                 <div
                   style={{ left: pct + '%' }}
-                  className="absolute top-1/2 size-3.5 bg-[var(--accent)] border-none rounded-full -translate-x-1/2 -translate-y-1/2 scale-0 shadow-[0_0_0_3px_rgba(var(--accent-glow),0.25)] opacity-0 transition-[opacity,transform] duration-150 pointer-events-none z-[12] group-hover/hero:opacity-100 group-hover/hero:scale-100 group-data-[controls=visible]/hero:opacity-100 group-data-[controls=visible]/hero:scale-100 pointer-coarse:opacity-100 pointer-coarse:scale-100 pointer-coarse:size-4"
+                  className="absolute top-1/2 size-3.5 bg-[var(--brand)] border-none rounded-full -translate-x-1/2 -translate-y-1/2 scale-0 shadow-[0_0_0_3px_rgba(var(--brand-glow),0.25)] opacity-0 transition-[opacity,transform] duration-150 pointer-events-none z-[12] group-hover/hero:opacity-100 group-hover/hero:scale-100 group-data-[controls=visible]/hero:opacity-100 group-data-[controls=visible]/hero:scale-100 pointer-coarse:opacity-100 pointer-coarse:scale-100 pointer-coarse:size-4"
                 />
               </div>
               <div className="px-4 pb-[max(14px,env(safe-area-inset-bottom))] pointer-events-none group-hover/hero:pointer-events-auto group-data-[controls=visible]/hero:pointer-events-auto">
@@ -1017,7 +1017,7 @@ export default function PlayerView() {
                     title="Play/Pause (Space)"
                     aria-label={playing ? 'Pause' : 'Play'}
                     onClick={togglePlay}
-                    className="bg-transparent border-none text-white cursor-pointer p-1.5 opacity-90 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--accent-hot)] hover:scale-105"
+                    className="bg-transparent border-none text-white cursor-pointer p-1.5 opacity-90 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--brand-hot)] hover:scale-105"
                   >
                     {playing ? (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
@@ -1052,7 +1052,7 @@ export default function PlayerView() {
                       type="range"
                       min="0" max="1" step="0.05" defaultValue="1"
                       onInput={e => { if (audioRef.current) audioRef.current.volume = parseFloat(e.currentTarget.value); }}
-                      className="w-[78px] accent-[var(--accent)]"
+                      className="w-[78px] accent-[var(--brand)]"
                     />
                   </div>
                   <div ref={menuRef} className="relative inline-flex items-center">
@@ -1063,7 +1063,7 @@ export default function PlayerView() {
                       aria-haspopup="menu"
                       aria-expanded={menuOpen}
                       onClick={() => setMenuOpen(o => !o)}
-                      className="bg-transparent border-none text-white cursor-pointer p-1.5 opacity-85 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--accent-hot)] hover:scale-105"
+                      className="bg-transparent border-none text-white cursor-pointer p-1.5 opacity-85 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--brand-hot)] hover:scale-105"
                     >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="3" />
@@ -1128,7 +1128,7 @@ export default function PlayerView() {
                     aria-pressed={captionsOn}
                     onClick={toggleCaptions}
                     data-active={captionsOn || undefined}
-                    className="relative bg-transparent border-none text-white cursor-pointer p-1.5 opacity-85 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--accent-hot)] hover:scale-105 data-[active]:text-[var(--accent-hot)] data-[active]:opacity-100 data-[active]:after:content-[''] data-[active]:after:absolute data-[active]:after:left-1.5 data-[active]:after:right-1.5 data-[active]:after:-bottom-0.5 data-[active]:after:h-0.5 data-[active]:after:bg-current data-[active]:after:rounded-[1px]"
+                    className="relative bg-transparent border-none text-white cursor-pointer p-1.5 opacity-85 inline-flex items-center transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--brand-hot)] hover:scale-105 data-[active]:text-[var(--brand-hot)] data-[active]:opacity-100 data-[active]:after:content-[''] data-[active]:after:absolute data-[active]:after:left-1.5 data-[active]:after:right-1.5 data-[active]:after:-bottom-0.5 data-[active]:after:h-0.5 data-[active]:after:bg-current data-[active]:after:rounded-[1px]"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M19 4H5a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3zM11 11.5H9.5v-.5h-2v2h2v-.5H11v1a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1zm7 0h-1.5v-.5h-2v2h2v-.5H18v1a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1z" />
@@ -1138,7 +1138,7 @@ export default function PlayerView() {
                     type="button"
                     title="Fullscreen (f)"
                     onClick={toggleFs}
-                    className="bg-transparent border-none text-white text-lg cursor-pointer px-1.5 py-0.5 opacity-85 transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--accent-hot)] hover:scale-110"
+                    className="bg-transparent border-none text-white text-lg cursor-pointer px-1.5 py-0.5 opacity-85 transition-[opacity,color,transform] duration-150 hover:opacity-100 hover:text-[var(--brand-hot)] hover:scale-110"
                   >⛶</button>
                 </div>
               </div>
@@ -1218,7 +1218,7 @@ export default function PlayerView() {
           <div className="flex gap-2.5 items-start">
             <div
               aria-hidden="true"
-              className="size-9 rounded-full bg-gradient-to-br from-[var(--accent)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0"
+              className="size-9 rounded-full bg-gradient-to-br from-[var(--brand)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0"
             >
               {(guide.author || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase()}
             </div>
@@ -1283,7 +1283,7 @@ export default function PlayerView() {
               <button
                 type="button"
                 onClick={handleSaveNoteSelection}
-                className="bg-[var(--accent)] text-white border-none rounded px-2.5 py-px text-[11px] font-semibold cursor-pointer leading-[1.7] transition-[filter] duration-100 hover:brightness-110"
+                className="bg-[var(--brand)] text-white border-none rounded px-2.5 py-px text-[11px] font-semibold cursor-pointer leading-[1.7] transition-[filter] duration-100 hover:brightness-110"
               >
                 Save note
               </button>

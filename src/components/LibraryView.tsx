@@ -329,7 +329,7 @@ export default function LibraryView() {
         <div className="flex items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="relative inline-flex size-[26px] items-center justify-center rounded-[7px] bg-[var(--accent)] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_6px_20px_rgba(var(--accent-glow),0.35)]"
+            className="relative inline-flex size-[26px] items-center justify-center rounded-[7px] bg-[var(--brand)] shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_6px_20px_rgba(var(--brand-glow),0.35)]"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
               <line x1="0" y1="14" x2="14" y2="0" stroke="white" strokeWidth="1" />
@@ -343,13 +343,13 @@ export default function LibraryView() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search guides"
-            className="w-full bg-card border border-border text-foreground px-4 py-2.5 rounded-full text-[0.92rem] outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--accent)] focus:bg-muted"
+            className="w-full bg-card border border-border text-foreground px-4 py-2.5 rounded-full text-[0.92rem] outline-none transition-colors placeholder:text-muted-foreground focus:border-[var(--brand)] focus:bg-muted"
           />
         </div>
         <button
           onClick={() => { resetCreateForm(); setModalOpen(true); }}
           aria-label="Create new guide"
-          className="justify-self-end inline-flex items-center gap-2 bg-[var(--accent)] text-white font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer shadow-[0_6px_20px_rgba(var(--accent-glow),0.35)] transition-[transform,box-shadow,background-color] duration-150 hover:bg-[var(--accent-hot)] hover:-translate-y-px hover:shadow-[0_10px_26px_rgba(var(--accent-glow),0.5)] active:translate-y-0"
+          className="justify-self-end inline-flex items-center gap-2 bg-[var(--brand)] text-white font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer shadow-[0_6px_20px_rgba(var(--brand-glow),0.35)] transition-[transform,box-shadow,background-color] duration-150 hover:bg-[var(--brand-hot)] hover:-translate-y-px hover:shadow-[0_10px_26px_rgba(var(--brand-glow),0.5)] active:translate-y-0"
         >
           <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
           <span className="hidden sm:inline">Create</span>
@@ -437,11 +437,11 @@ export default function LibraryView() {
               </div>
               <h3 className="font-['Bricolage_Grotesque'] font-extrabold text-[1.4rem] tracking-[-0.025em] leading-[1.15] mt-0 mb-1 text-foreground line-clamp-2">{g.title}</h3>
               <div className="flex gap-2.5 items-start">
-                <div aria-hidden="true" className="size-9 rounded-full bg-gradient-to-br from-[var(--accent)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0">
+                <div aria-hidden="true" className="size-9 rounded-full bg-gradient-to-br from-[var(--brand)] to-[#b6291f] flex items-center justify-center text-white font-extrabold font-['Bricolage_Grotesque'] text-[0.95rem] shrink-0">
                   {initials(g.author)}
                 </div>
                 <div className="min-w-0">
-                  {g.author && <div className="text-[0.82rem] leading-snug font-medium text-foreground mb-0.5 hover:text-[var(--accent-hot)]">{g.author}</div>}
+                  {g.author && <div className="text-[0.82rem] leading-snug font-medium text-foreground mb-0.5 hover:text-[var(--brand-hot)]">{g.author}</div>}
                   {g.date && <div className="text-[0.82rem] leading-snug font-medium text-muted-foreground">{g.date}</div>}
                 </div>
               </div>
@@ -513,7 +513,7 @@ export default function LibraryView() {
                     value={sourceUrl}
                     onChange={e => setSourceUrl(e.target.value)}
                     placeholder="https://example.com/article"
-                    className="w-full border border-border bg-background text-foreground rounded-lg p-3 text-[15px] outline-none transition-colors focus:border-[var(--accent)]"
+                    className="w-full border border-border bg-background text-foreground rounded-lg p-3 text-[15px] outline-none transition-colors focus:border-[var(--brand)]"
                   />
                 </div>
               ) : (
@@ -524,7 +524,7 @@ export default function LibraryView() {
                     onChange={e => setPastedText(e.target.value)}
                     rows={10}
                     placeholder="Paste the full article or essay text here..."
-                    className="w-full border border-border bg-background text-foreground rounded-lg p-3 text-[15px] outline-none transition-colors focus:border-[var(--accent)] min-h-[180px] resize-y leading-normal"
+                    className="w-full border border-border bg-background text-foreground rounded-lg p-3 text-[15px] outline-none transition-colors focus:border-[var(--brand)] min-h-[180px] resize-y leading-normal"
                   />
                 </div>
               )}
@@ -550,7 +550,7 @@ export default function LibraryView() {
                       resetCreateForm();
                       navigate(`/app/${encodeURIComponent(slug)}`);
                     }}
-                    className="font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer border-none bg-[var(--accent)] text-white shadow-[0_6px_20px_rgba(var(--accent-glow),0.35)] transition-colors hover:bg-[var(--accent-hot)] disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer border-none bg-[var(--brand)] text-white shadow-[0_6px_20px_rgba(var(--brand-glow),0.35)] transition-colors hover:bg-[var(--brand-hot)] disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     Open player
                   </button>
@@ -559,7 +559,7 @@ export default function LibraryView() {
                 <button
                   type="submit"
                   disabled={submitting || (sourceMode === 'url' ? !sourceUrl.trim() : !pastedText.trim())}
-                  className="inline-flex items-center gap-2 font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer border-none bg-[var(--accent)] text-white shadow-[0_6px_20px_rgba(var(--accent-glow),0.35)] transition-colors hover:bg-[var(--accent-hot)] disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-2 font-bold text-[0.88rem] py-2.5 px-4 rounded-full cursor-pointer border-none bg-[var(--brand)] text-white shadow-[0_6px_20px_rgba(var(--brand-glow),0.35)] transition-colors hover:bg-[var(--brand-hot)] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {submitting && <Spinner className="size-4 text-white" />}
                   {submitLabel}
