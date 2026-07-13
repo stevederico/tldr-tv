@@ -2242,7 +2242,9 @@ async function runChapterRealImagesJob(slug: string): Promise<void> {
  * are attached locally after TTS produces word timings.
  *
  * Stages:
- *   1. parallel: analyze (author + summary + chapter outlines), thumbnail, tts
+ *   1. parallel: analyze (author + summary + chapter outlines), thumbnail, tts.
+ *      Thumbnail self-skips when guide.thumbnail (og:image) is already set, so it
+ *      only spends on articles with no cover art (generates one).
  *   2. attach chapter times (no API call) once words are available
  *   3. chapter-images (Grok Imagine) — skipped when opts.skipImages is set
  *      (extension PiP uses blog photos as a slideshow instead).
@@ -2269,8 +2271,12 @@ async function runFullPipeline(
 
   const stageA = await Promise.allSettled([
     runAnalyzeStep(slug),
-    // Thumbnail gen is also image spend — skip with skipImages (PiP has og/page art)
-    opts.skipImages ? Promise.resolve() : runThumbnailStep(slug),
+    // Always attempt a cover: runThumbnailStep self-skips when guide.thumbnail is
+    // already set (og:image), so sites with art cost nothing, and image-less
+    // articles (e.g. Paul Graham essays, no og:image and only decorative gifs)
+    // still get a generated cover instead of no artwork. Chapter images remain
+    // gated by skipImages — that's the expensive per-chapter spend the PiP skips.
+    runThumbnailStep(slug),
     runTtsJobStaged(slug),
   ]);
   logStageOutcomes('stageA', slug, ['analyze', 'thumbnail', 'tts'], stageA);

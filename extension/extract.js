@@ -91,41 +91,71 @@ const ROOT_SELECTORS = [
 export const MAX_PAGE_IMAGES = 12;
 
 /**
- * Minimum width/height (px) for a page image to qualify. Article/hero photos are
- * large; share buttons, author avatars, emoji, and site icons are small. We only
- * reject when a real size is known — an unmeasurable image (lazy, no attrs) is
- * kept rather than risk dropping the main photo.
+ * Minimum width AND height (px) for a page image to qualify. Article/hero photos
+ * are large in both dimensions; share buttons, avatars, emoji, and icons are
+ * small, and decorative banners/nav strips are large in one dimension but tiny
+ * in the other. We only reject when a real size is known — an unmeasurable image
+ * (lazy, no attrs) is kept rather than risk dropping the main photo.
  */
 export const MIN_IMAGE_DIM = 200;
 
 /**
- * Best-known largest dimension (px) of an <img>, or 0 when unknown. Tries, in
- * order: natural pixels (loaded images), width/height attributes, the largest
- * `Nw` srcset descriptor, then the rendered box.
+ * Max width:height (or height:width) ratio. Rejects banners, rules, and vertical
+ * nav strips (e.g. Paul Graham's site chrome) that pass a single-dimension check
+ * but are clearly not content photos.
+ */
+export const MAX_IMAGE_ASPECT = 3;
+
+/**
+ * Known pixel dimensions of an <img>, or 0 when unknown. Tries, in order:
+ * natural pixels (loaded images), width/height attributes, then the rendered
+ * box. A width-only srcset descriptor is returned as a square (aspect unknown,
+ * so it isn't rejected on ratio).
  *
  * @param {Element} img
- * @returns {number}
+ * @returns {{ w: number, h: number }}
  */
-export function imageMaxDim(img) {
-  const nat = Math.max(Number(img.naturalWidth) || 0, Number(img.naturalHeight) || 0);
-  if (nat > 0) return nat;
-  const attr = Math.max(
-    parseInt(img.getAttribute('width') || '0', 10) || 0,
-    parseInt(img.getAttribute('height') || '0', 10) || 0
-  );
-  if (attr > 0) return attr;
-  let maxW = 0;
-  for (const part of (img.getAttribute('srcset') || '').split(',')) {
-    const m = part.trim().match(/\s(\d+)w$/);
-    if (m) maxW = Math.max(maxW, parseInt(m[1], 10));
+export function imageDims(img) {
+  let w = Number(img.naturalWidth) || 0;
+  let h = Number(img.naturalHeight) || 0;
+  if (!w) w = parseInt(img.getAttribute('width') || '0', 10) || 0;
+  if (!h) h = parseInt(img.getAttribute('height') || '0', 10) || 0;
+  if (!w && !h) {
+    let maxW = 0;
+    for (const part of (img.getAttribute('srcset') || '').split(',')) {
+      const m = part.trim().match(/\s(\d+)w$/);
+      if (m) maxW = Math.max(maxW, parseInt(m[1], 10));
+    }
+    if (maxW > 0) return { w: maxW, h: maxW };
   }
-  if (maxW > 0) return maxW;
-  try {
-    const r = img.getBoundingClientRect();
-    return Math.max(r.width || 0, r.height || 0);
-  } catch {
-    return 0;
+  if (!w && !h) {
+    try {
+      const r = img.getBoundingClientRect();
+      w = Math.round(r.width) || 0;
+      h = Math.round(r.height) || 0;
+    } catch {
+      /* detached */
+    }
   }
+  return { w: Math.round(w), h: Math.round(h) };
+}
+
+/**
+ * True if an image is large enough and not banner/strip-shaped to be a real
+ * content photo. Unknown size (both 0) passes — the URL blocklist still applies,
+ * and we'd rather keep a lazy hero than drop it.
+ *
+ * @param {{ w: number, h: number }} dims
+ * @returns {boolean}
+ */
+export function isQualityImage({ w, h }) {
+  if (!w && !h) return true; // unmeasurable → allow
+  if (w && h) {
+    if (w < MIN_IMAGE_DIM || h < MIN_IMAGE_DIM) return false;
+    const ar = w / h;
+    return ar <= MAX_IMAGE_ASPECT && ar >= 1 / MAX_IMAGE_ASPECT;
+  }
+  return Math.max(w, h) >= MIN_IMAGE_DIM; // only one dim known
 }
 
 /**
@@ -258,6 +288,9 @@ export function extractPageImages(doc, opts = {}) {
     // Skip obvious icons / avatars / share buttons / trackers by URL.
     if (/\b(sprite|icon|logo|avatar|gravatar|emoji|share|social|profile|author|widget|1x1|pixel|badge|button|spacer|blank)\b/i.test(abs)) return;
     if (/gravatar\.com|\/emoji\//i.test(abs)) return;
+    // GIFs on article pages are almost always decorative (site chrome, spacers,
+    // banners) — not high-quality content photos.
+    if (/\.gif(\?|#|$)/i.test(abs)) return;
     if (seen.has(abs)) return;
     seen.add(abs);
     out.push(abs);
@@ -270,10 +303,9 @@ export function extractPageImages(doc, opts = {}) {
   if (scope && typeof scope.querySelectorAll === 'function') {
     for (const img of scope.querySelectorAll('img[src], img[data-src], img[srcset]')) {
       if (isInsideComments(img)) continue;
-      // Reject small images (share buttons, avatars, emoji, icons) by measured
-      // size. Unknown size (0) is allowed — better than dropping a lazy hero.
-      const dim = imageMaxDim(img);
-      if (dim > 0 && dim < MIN_IMAGE_DIM) continue;
+      // Reject small images (avatars, share buttons, icons) and banner/strip
+      // shapes (site chrome) by measured size + aspect. Unknown size is allowed.
+      if (!isQualityImage(imageDims(img))) continue;
       const src =
         img.getAttribute('src') ||
         img.getAttribute('data-src') ||

@@ -126,6 +126,26 @@ describe('extractArticle', () => {
     assert.ok(!imgs.some((u) => u.includes('emoji')), 'drops emoji');
   });
 
+  it('rejects banner/strip shapes and decorative gifs (paulgraham.com style)', () => {
+    const doc = dom(`
+      <html><head></head>
+      <body><div class="entry-content">
+        <p>${'Paragraph with enough characters for the body extract path to keep. '.repeat(2)}</p>
+        <img src="https://cdn.example.com/photo.jpg" width="800" height="600" />
+        <img src="https://s.example.com/nav-strip.png" width="69" height="357" />
+        <img src="https://s.example.com/banner.png" width="410" height="45" />
+        <img src="https://s.example.com/title.gif" width="242" height="18" />
+        <img src="https://s.example.com/hero.gif" width="800" height="600" />
+      </div></body></html>
+    `);
+    const imgs = extractPageImages(doc, { pageUrl: 'https://example.com/a' });
+    assert.ok(imgs.includes('https://cdn.example.com/photo.jpg'), 'keeps 800x600 photo');
+    assert.ok(!imgs.some((u) => u.includes('nav-strip')), 'drops 69x357 strip');
+    assert.ok(!imgs.some((u) => u.includes('banner')), 'drops 410x45 banner');
+    assert.ok(!imgs.some((u) => u.includes('title.gif')), 'drops tiny title gif');
+    assert.ok(!imgs.some((u) => u.includes('hero.gif')), 'drops gif even at good size');
+  });
+
   it('prefers the largest srcset candidate', () => {
     const doc = dom(`
       <html><head></head>

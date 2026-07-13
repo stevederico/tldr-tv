@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.101.0
+
+  Stricter image gate
+  Generate cover fallback
+
 0.100.0
 
   Keep PG essay media
