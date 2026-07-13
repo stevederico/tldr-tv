@@ -78,6 +78,9 @@ let wordStartTimes = null;
 let anchors = null;
 let totalWords = 0;
 let timingOffset = 0;
+// Guide's real audio duration once known (from the payload). The live stream's
+// <audio>.duration is Infinity, so we fall back to this for the timeline total.
+let knownDuration = 0;
 /** Transcript parsed into paragraphs/chunks (done once). */
 let transcriptParsed = false;
 /** Real per-word timings aligned (done once timing arrives — may lag transcript). */
@@ -129,7 +132,8 @@ function esc(s) {
  * @returns {string}
  */
 function fmt(sec) {
-  const s = Math.max(0, Math.floor(sec || 0));
+  const safe = Number.isFinite(sec) ? sec : 0; // live stream duration is Infinity
+  const s = Math.max(0, Math.floor(safe || 0));
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, '0')}`;
@@ -388,6 +392,7 @@ function applyGuide(guide) {
 
   const audioPath = typeof g.audio === 'string' ? g.audio.trim() : '';
   const duration = Number(g.duration);
+  if (Number.isFinite(duration) && duration > 0) knownDuration = duration;
   const playable = audioPath.length > 0 && Number.isFinite(duration) && duration > 0;
   const ttsRunning = jobs.tts?.status === 'running';
   const firstChunkReady = (Number(jobs.tts?.chunksDone) || 0) >= 1;
@@ -443,8 +448,12 @@ function applyGuide(guide) {
 function tickTime() {
   if (!(audioEl instanceof HTMLAudioElement)) return;
   const cur = audioEl.currentTime || 0;
-  const dur = audioEl.duration || 0;
-  if (timeEl) timeEl.textContent = `${fmt(cur)} / ${fmt(dur || 0)}`;
+  // The live stream reports duration=Infinity; fall back to the guide's known
+  // duration so the total/progress are real, and show elapsed-only when neither
+  // is known yet (early streaming) rather than "Infinity:NaN".
+  const rawDur = audioEl.duration;
+  const dur = Number.isFinite(rawDur) && rawDur > 0 ? rawDur : knownDuration;
+  if (timeEl) timeEl.textContent = dur > 0 ? `${fmt(cur)} / ${fmt(dur)}` : fmt(cur);
   const pct = dur > 0 ? Math.max(0, Math.min(100, (cur / dur) * 100)) : 0;
   if (fillEl instanceof HTMLElement) fillEl.style.width = `${pct}%`;
   if (thumbEl instanceof HTMLElement) thumbEl.style.left = `${pct}%`;

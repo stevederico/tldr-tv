@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.82.2
+
+  Hide stream duration
+  Move link icon
+
 0.82.1
 
   Fix frozen captions
