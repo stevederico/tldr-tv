@@ -79,13 +79,22 @@ let wantPlaying = false;
 // Distinct from user pause so we auto-resume without fighting the play button.
 let rebuffering = false;
 /** Seconds of buffered audio required before the first autoplay on a live
- *  stream. Kept small for a fast (~2-3s) start; the rebuffer net below catches
- *  the rare case where the playhead outruns the still-generating frontier. */
-const MIN_START_BUFFER_SEC = 3;
-/** Seconds of headroom required before resuming after a rebuffer pause. */
+ *  stream. Small = fast start; safe with MSE, which never skips content. */
+const MIN_START_BUFFER_SEC = 2;
+/** Seconds of headroom required before resuming after a rebuffer pause
+ *  (direct-<audio> fallback path only — MSE handles under-run natively). */
 const MIN_RESUME_BUFFER_SEC = 4;
-/** If headroom falls below this while streaming, pause and rebuffer. */
+/** If headroom falls below this while streaming, pause and rebuffer
+ *  (direct-<audio> fallback path only). */
 const REBUFFER_FLOOR_SEC = 1.5;
+/** True once the MediaSource path is driving playback (vs the <audio src>
+ *  fallback). MSE gives a precise buffered timeline so the browser never
+ *  re-estimates position from bitrate and jumps — the cause of the "skipping"
+ *  on the growing, Infinity-duration progressive MP3. */
+let usingMse = false;
+/** Live MSE plumbing (source buffer + append queue), or null when not on MSE. */
+/** @type {{ sb: SourceBuffer, ms: MediaSource, queue: Uint8Array[], reading: boolean } | null} */
+let mse = null;
 
 // --- Captions + word highlighting (ported from the web PlayerView) ---
 /** Lead the highlight so the word lights as it is heard, not after. */
@@ -427,12 +436,25 @@ function bufferedAhead(audio) {
 }
 
 /**
- * Start or resume progressive-stream playback only when enough buffer exists.
- * Prevents the classic "plays 2s → stalls → plays 2s" loop when the browser
- * autoplays into an almost-empty progressive download.
+ * Autoplay once a small lead is buffered. Shared by the MSE and direct paths.
+ * Playing into a near-empty buffer is what caused the "plays 2s → stalls" loop.
+ */
+function maybeStartPlayback() {
+  if (autoplayAttempted || !(audioEl instanceof HTMLAudioElement)) return;
+  if (bufferedAhead(audioEl) < MIN_START_BUFFER_SEC) return;
+  autoplayAttempted = true;
+  wantPlaying = true;
+  if (buildEl) buildEl.classList.add('is-hidden');
+  void audioEl.play().catch(() => {});
+}
+
+/**
+ * Direct-<audio> fallback pump: gate the first play on buffer, and pause/resume
+ * ("rebuffer") if the progressive download under-runs. Only used when MSE is
+ * unavailable — MSE handles under-run natively without a manual pause.
  */
 function pumpStreamPlayback() {
-  if (!(audioEl instanceof HTMLAudioElement) || !streamStarted) return;
+  if (!(audioEl instanceof HTMLAudioElement) || !streamStarted || usingMse) return;
   const ahead = bufferedAhead(audioEl);
 
   if (rebuffering) {
@@ -443,15 +465,8 @@ function pumpStreamPlayback() {
     return;
   }
 
-  // First start: wait for a solid lead so the playhead doesn't eat the
-  // still-generating frontier inside the first ~15s of listening.
   if (!autoplayAttempted) {
-    if (ahead >= MIN_START_BUFFER_SEC) {
-      autoplayAttempted = true;
-      wantPlaying = true;
-      if (buildEl) buildEl.classList.add('is-hidden');
-      void audioEl.play().catch(() => {});
-    }
+    maybeStartPlayback();
     return;
   }
 
@@ -460,6 +475,123 @@ function pumpStreamPlayback() {
     rebuffering = true;
     audioEl.pause();
   }
+}
+
+/**
+ * Point <audio> straight at the progressive URL (fallback when MSE isn't
+ * available). The browser guesses position from bitrate on this growing,
+ * Infinity-duration MP3, so it can jump — but it's better than no audio.
+ *
+ * @param {string} url
+ */
+function startDirectStream(url) {
+  if (!(audioEl instanceof HTMLAudioElement)) return;
+  usingMse = false;
+  audioEl.preload = 'auto';
+  audioEl.dataset.src = url;
+  audioEl.src = url;
+  audioEl.playbackRate = rate;
+  pumpStreamPlayback();
+}
+
+/**
+ * Feed one queued MP3 buffer into the SourceBuffer, if idle. Re-queues on a
+ * transient QuotaExceeded so no audio is dropped (dropping = an audible skip).
+ */
+function pumpMseAppend() {
+  if (!mse || mse.sb.updating || mse.queue.length === 0) return;
+  if (mse.ms.readyState !== 'open') return;
+  const buf = mse.queue.shift();
+  if (!buf) return;
+  try {
+    mse.sb.appendBuffer(buf);
+  } catch {
+    // QuotaExceeded / InvalidState — put it back and retry on the next tick.
+    mse.queue.unshift(buf);
+  }
+}
+
+/**
+ * Stream the guide's progressive MP3 through MediaSource so the browser has an
+ * exact buffered timeline — no bitrate-based position guessing, no jump/skip as
+ * the file grows, and native (skip-free) handling of under-runs. Falls back to a
+ * direct <audio src> if MSE or MP3-in-MSE is unavailable, or on any error before
+ * playback has begun.
+ *
+ * @param {string} url - Progressive stream endpoint (302s to the canonical file
+ *   once render is done; fetch follows the redirect transparently).
+ */
+function startMseStream(url) {
+  if (!(audioEl instanceof HTMLAudioElement)) return;
+  const supported = typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('audio/mpeg');
+  if (!supported) {
+    startDirectStream(url);
+    return;
+  }
+
+  usingMse = true;
+  const ms = new MediaSource();
+  audioEl.preload = 'auto';
+  const objectUrl = URL.createObjectURL(ms);
+  audioEl.dataset.src = url;
+  audioEl.src = objectUrl;
+  audioEl.playbackRate = rate;
+
+  ms.addEventListener('sourceopen', () => {
+    URL.revokeObjectURL(objectUrl);
+    /** @type {SourceBuffer} */
+    let sb;
+    try {
+      sb = ms.addSourceBuffer('audio/mpeg');
+    } catch {
+      if (!playbackBegan) startDirectStream(url);
+      return;
+    }
+    // Real total duration lets the timeline/seek map correctly while streaming.
+    if (knownDuration > 0) {
+      try { ms.duration = knownDuration; } catch { /* set later */ }
+    }
+    mse = { sb, ms, queue: [], reading: true };
+
+    sb.addEventListener('updateend', () => {
+      maybeStartPlayback();
+      if (mse && mse.queue.length > 0) pumpMseAppend();
+      else if (mse && !mse.reading && ms.readyState === 'open') {
+        try { ms.endOfStream(); } catch { /* already ended */ }
+      }
+    });
+
+    void (async () => {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok || !resp.body) throw new Error(`stream ${resp.status}`);
+        const reader = resp.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value && value.length && mse) {
+            mse.queue.push(value);
+            pumpMseAppend();
+          }
+        }
+      } catch {
+        // Nothing played yet → fall back to a plain <audio src> on the same URL.
+        if (!playbackBegan) {
+          usingMse = false;
+          mse = null;
+          startDirectStream(url);
+          return;
+        }
+      } finally {
+        if (mse) {
+          mse.reading = false;
+          if (mse.queue.length === 0 && !mse.sb.updating && ms.readyState === 'open') {
+            try { ms.endOfStream(); } catch { /* already ended */ }
+          }
+        }
+      }
+    })();
+  });
 }
 
 function togglePlay() {
@@ -541,6 +673,8 @@ function applyGuide(guide) {
     // stuck on "Ready"): nothing has played, so switching to the seekable file
     // is safe and unblocks the start.
     streamStarted = false;
+    usingMse = false;
+    mse = null;
     const src = assetUrl(audioPath);
     if (audioEl.dataset.src !== src) {
       audioEl.dataset.src = src;
@@ -564,30 +698,25 @@ function applyGuide(guide) {
   }
 
   if (streamStarted && audioEl instanceof HTMLAudioElement) {
-    // Attached to the live stream, still rendering, not yet playing — wait for
-    // buffer via pump. Keep the src latched (don't re-assign, that rebuffers).
+    // Attached to the live stream, still rendering, not yet playing — the MSE
+    // append loop / direct pump starts playback once buffered. Don't re-attach.
     if (autoplayAttempted && buildEl) buildEl.classList.add('is-hidden');
     pumpStreamPlayback();
     return;
   }
 
   if (ttsRunning && leadReady && audioEl instanceof HTMLAudioElement) {
-    // Point <audio> at the progressive stream, but do NOT play yet — wait for
-    // bufferedAhead >= MIN_START_BUFFER_SEC via progress/timeupdate. Playing
-    // into a near-empty progressive download is what caused stalls in <15s.
+    // Attach the progressive stream (via MediaSource for a skip-free timeline).
+    // Playback auto-starts once MIN_START_BUFFER_SEC is buffered; the first TTS
+    // chunk is ~25s of audio so that lead lands almost immediately.
     streamStarted = true;
     rebuffering = false;
-    const src = `${apiBase}/api/guides/${encodeURIComponent(slug)}/stream.mp3`;
-    audioEl.dataset.src = src;
-    audioEl.preload = 'auto';
-    audioEl.src = src;
-    audioEl.playbackRate = rate;
     if (playBtn instanceof HTMLButtonElement) playBtn.disabled = false;
-    // Keep the build overlay until pumpStreamPlayback has enough buffer to play
-    // — hides the "plays 2s then stalls" gap as a single "Buffering…" wait.
+    // Keep the build overlay until enough buffer to play — one "Buffering…" wait
+    // instead of a visible "plays then stalls" gap.
     if (buildEl) buildEl.classList.remove('is-hidden');
     if (buildStep) buildStep.textContent = 'Buffering audio…';
-    pumpStreamPlayback();
+    startMseStream(`${apiBase}/api/guides/${encodeURIComponent(slug)}/stream.mp3`);
     return;
   }
 
@@ -608,7 +737,19 @@ function tickTime() {
   if (fillEl instanceof HTMLElement) fillEl.style.width = `${pct}%`;
   if (thumbEl instanceof HTMLElement) thumbEl.style.left = `${pct}%`;
   // Drive progressive-stream start/rebuffer from the same tick as the timeline.
-  if (streamStarted) pumpStreamPlayback();
+  if (streamStarted) {
+    if (usingMse) {
+      // Set the real total duration once known (may arrive after attach) so the
+      // timeline + scrubbing map correctly; safe only while the buffer is idle.
+      if (mse && knownDuration > 0 && mse.ms.readyState === 'open' && !mse.sb.updating && mse.ms.duration !== knownDuration) {
+        try { mse.ms.duration = knownDuration; } catch { /* ignore */ }
+      }
+      maybeStartPlayback();
+      pumpMseAppend();
+    } else {
+      pumpStreamPlayback();
+    }
+  }
   // Keep captions in sync on seek / metadata / paused ticks (the rAF loop only
   // runs while playing).
   renderCaption();
@@ -727,24 +868,26 @@ async function init() {
   // lands), reset so the next poll re-attempts — either the stream again or the
   // canonical file once it's ready.
   audioEl?.addEventListener('error', () => {
-    // Only recover (re-attempt src on the next poll) if playback never began —
-    // i.e. a genuine early race before the first stream bytes landed. Once audio
-    // has advanced, keep the stream latched so we never restart from 0.
+    // Only recover if playback never began — a genuine early race before the
+    // first stream bytes landed. Once audio has advanced, keep it latched so we
+    // never restart from 0. (MSE errors self-recover inside startMseStream.)
     if (streamStarted && !playbackBegan) {
       streamStarted = false;
       autoplayAttempted = false;
       rebuffering = false;
+      usingMse = false;
+      mse = null;
     }
   });
-  // Browser ran out of progressive bytes — enter rebuffer (resume via pump).
+  // Direct-path under-run → rebuffer (resume via pump). MSE handles this itself.
   audioEl?.addEventListener('waiting', () => {
-    if (streamStarted && wantPlaying && playbackBegan) rebuffering = true;
+    if (streamStarted && !usingMse && wantPlaying && playbackBegan) rebuffering = true;
   });
   audioEl?.addEventListener('progress', () => {
-    if (streamStarted) pumpStreamPlayback();
+    if (streamStarted && !usingMse) pumpStreamPlayback();
   });
   audioEl?.addEventListener('canplay', () => {
-    if (streamStarted) pumpStreamPlayback();
+    if (streamStarted) { if (usingMse) maybeStartPlayback(); else pumpStreamPlayback(); }
   });
   audioEl?.addEventListener('timeupdate', tickTime);
   audioEl?.addEventListener('loadedmetadata', () => {

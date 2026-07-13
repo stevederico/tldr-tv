@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.92.0
+
+  MSE stream playback
+  Fix audio skipping
+
 0.91.0
 
   Fix stuck start
