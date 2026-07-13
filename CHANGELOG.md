@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.89.0
+
+  Blue play icon
+
 0.88.0
 
   Play button icon
