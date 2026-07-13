@@ -87,6 +87,7 @@ const {
   tokenExpireTimestamp,
   config,
   shouldStartServer,
+  __testTtsStreamNext,
 } = await import('./server.ts');
 
 // server.ts runs loadLocalENV() at import, which loads the app's backend/.env and can
@@ -1508,5 +1509,35 @@ describe('server registration hooks', () => {
     const client = __testInitializeStripe('sk_test_initialize');
     assert.ok(client);
     assert.equal(typeof client.webhooks, 'object');
+  });
+});
+
+describe('__testTtsStreamNext (progressive TTS stream loop)', () => {
+  const running = { chunksTotal: 5, chunksDone: 2, done: false, failed: false };
+
+  it('writes the part when it exists on disk', () => {
+    assert.equal(__testTtsStreamNext(0, true, running), 'write');
+  });
+
+  it('waits when the next part is not ready but the render is still running', () => {
+    assert.equal(__testTtsStreamNext(2, false, running), 'wait');
+  });
+
+  it('ends when the state file is gone', () => {
+    assert.equal(__testTtsStreamNext(0, false, null), 'end');
+  });
+
+  it('ends when the render failed', () => {
+    assert.equal(__testTtsStreamNext(1, false, { ...running, failed: true }), 'end');
+  });
+
+  it('ends when done and all parts have been flushed', () => {
+    assert.equal(__testTtsStreamNext(4, false, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'end');
+  });
+
+  it('still flushes remaining parts after done before ending', () => {
+    // done=true but the consumer is behind (idx < chunksDone): keep going.
+    assert.equal(__testTtsStreamNext(2, false, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'wait');
+    assert.equal(__testTtsStreamNext(2, true, { chunksTotal: 4, chunksDone: 4, done: true, failed: false }), 'write');
   });
 });

@@ -416,12 +416,13 @@ book-player/
 
 Guides (audio essays / books) are stored in the SQLite `Guides` table — not in static files. Audio + images sit on disk under `backend/public/{audio,images}/` and Hono serves them with `Range` support so playback streams correctly.
 
-**The three content routes the frontend uses:**
+**The content routes the frontend uses:**
 
 | Route | Purpose |
 |---|---|
 | `GET /api/guides` | Library summaries (slug, title, author, duration, thumbnail, chapterCount) |
 | `GET /api/guides/:slug` | Full payload: chapters, transcript, word timings, audio URL |
+| `GET /api/guides/:slug/stream.mp3` | Progressive TTS audio — streams chunk MP3s during render for fast playback start, else `302` to `/audio/<slug>.mp3` |
 | `POST /api/guides` + `POST /api/guides/:slug/audio` | Create flow (currently open; auth gating on `todo.md`) |
 
 In dev, Vite proxies `/api`, `/audio`, `/images` to the backend on `:8000`. In prod, Hono serves all three directly.

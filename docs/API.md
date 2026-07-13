@@ -325,6 +325,27 @@ Multipart upload. Stores the file at `backend/public/audio/<slug>.mp3` and updat
 
 ---
 
+#### GET /api/guides/:slug/stream.mp3
+Progressive audio for fast playback start. While TTS is still rendering, the
+background job writes each chunk's MP3 to `<slug>.parts/` as it completes; this
+endpoint concatenates those parts into a single chunked-transfer response,
+holding the connection open and appending new chunks as they land. The player
+starts within ~1-2s instead of waiting for the whole render. Once the canonical
+`<slug>.mp3` exists, the endpoint `302`-redirects to it (Range-seekable).
+
+**Response:**
+- `200` — `audio/mpeg`, `Transfer-Encoding: chunked` (live render in progress)
+- `302` — redirect to `/audio/<slug>.mp3` (render finished)
+
+Served with `Cross-Origin-Resource-Policy: cross-origin` so the extension PiP
+(`chrome-extension://` origin) can play it.
+
+**Errors:**
+- `400` — invalid slug
+- `404` — no render in progress and no canonical file (TTS not started)
+
+---
+
 ### Payments (Stripe)
 
 #### POST /api/checkout

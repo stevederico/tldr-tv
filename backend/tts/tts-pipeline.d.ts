@@ -13,6 +13,16 @@ export interface TtsProgress {
   chunksTotal: number;
 }
 
+/** Metadata for a single streamed chunk MP3. */
+export interface TtsChunkMeta {
+  /** Zero-based source chunk index. */
+  index: number;
+  /** Chunks synthesized so far (== index + 1). */
+  chunksDone: number;
+  /** Total chunks to synthesize. */
+  chunksTotal: number;
+}
+
 /** Normalize text for TTS (expand abbreviations, strip markup, etc.). */
 export function normalizeForTts(text: string): string;
 
@@ -25,6 +35,7 @@ export function synthesizeGuide(args: {
   voice?: string;
   speed?: number;
   onProgress?: (progress: TtsProgress) => void;
+  onChunk?: (mp3: Buffer, meta: TtsChunkMeta) => void | Promise<void>;
 }): Promise<{
   audioMp3: Buffer;
   words: WordTiming[];

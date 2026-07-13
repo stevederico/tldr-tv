@@ -60,6 +60,10 @@ let galleryTimer = null;
 let autoplayAttempted = false;
 let scrubbing = false;
 let rate = 1;
+// True once we've pointed <audio> at the progressive stream endpoint (fast
+// start before the full render finishes). Prevents re-setting src every poll
+// and prevents a mid-playback swap to the canonical file.
+let streamStarted = false;
 
 // --- Captions + word highlighting (ported from the web PlayerView) ---
 /** Lead the highlight so the word lights as it is heard, not after. */
@@ -363,8 +367,20 @@ function applyGuide(guide) {
   const audioPath = typeof g.audio === 'string' ? g.audio.trim() : '';
   const duration = Number(g.duration);
   const playable = audioPath.length > 0 && Number.isFinite(duration) && duration > 0;
+  const ttsRunning = jobs.tts?.status === 'running';
+  const firstChunkReady = (Number(jobs.tts?.chunksDone) || 0) >= 1;
 
-  if (playable && audioEl instanceof HTMLAudioElement) {
+  if (streamStarted && audioEl instanceof HTMLAudioElement) {
+    // Already playing the progressive stream — it delivers the whole guide, so
+    // don't swap src (that would restart playback). Just keep the build hidden
+    // and stop polling once the pipeline is done.
+    if (buildEl) buildEl.classList.add('is-hidden');
+    if (pollId && jobs.pipeline?.status === 'done') {
+      clearInterval(pollId);
+      pollId = null;
+    }
+  } else if (playable && audioEl instanceof HTMLAudioElement) {
+    // Canonical file is ready (Range-seekable) — normal full-fidelity playback.
     const src = assetUrl(audioPath);
     if (audioEl.dataset.src !== src) {
       audioEl.dataset.src = src;
@@ -379,12 +395,23 @@ function applyGuide(guide) {
       void audioEl.play().catch(() => {});
     }
 
-    if (pollId && (jobs.pipeline?.status === 'done' || jobs.tts?.status === 'done')) {
-      // Keep a short poll until pipeline done, then stop
-      if (jobs.pipeline?.status === 'done') {
-        clearInterval(pollId);
-        pollId = null;
-      }
+    if (pollId && jobs.pipeline?.status === 'done') {
+      clearInterval(pollId);
+      pollId = null;
+    }
+  } else if (ttsRunning && firstChunkReady && audioEl instanceof HTMLAudioElement) {
+    // Audio isn't fully rendered yet, but the first chunk exists — start
+    // playing the progressive stream now so playback begins in ~1-2s.
+    streamStarted = true;
+    const src = `${apiBase}/api/guides/${encodeURIComponent(slug)}/stream.mp3`;
+    audioEl.dataset.src = src;
+    audioEl.src = src;
+    audioEl.playbackRate = rate;
+    if (playBtn instanceof HTMLButtonElement) playBtn.disabled = false;
+    if (buildEl) buildEl.classList.add('is-hidden');
+    if (!autoplayAttempted) {
+      autoplayAttempted = true;
+      void audioEl.play().catch(() => {});
     }
   } else if (buildEl) {
     buildEl.classList.remove('is-hidden');
@@ -512,6 +539,15 @@ async function init() {
     if (playBtn) playBtn.setAttribute('aria-label', 'Play');
     stopCaptionLoop();
     renderCaption();
+  });
+  // If the progressive stream errors (e.g. a brief race before the first part
+  // lands), reset so the next poll re-attempts — either the stream again or the
+  // canonical file once it's ready.
+  audioEl?.addEventListener('error', () => {
+    if (streamStarted && !(audioEl instanceof HTMLAudioElement && audioEl.duration > 0)) {
+      streamStarted = false;
+      autoplayAttempted = false;
+    }
   });
   audioEl?.addEventListener('timeupdate', tickTime);
   audioEl?.addEventListener('loadedmetadata', () => {

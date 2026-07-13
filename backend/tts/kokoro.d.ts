@@ -27,7 +27,7 @@ export function concatWav(
 export function silenceWav(durationSec: number, sampleRate?: number): Buffer;
 
 /** Transcode a WAV buffer to MP3. */
-export function wavToMp3(wavBuf: Buffer): Buffer;
+export function wavToMp3(wavBuf: Buffer, opts?: { xing?: boolean }): Promise<Buffer>;
 
 /**
  * Synthesize speech for a text chunk, returning audio plus per-word timing.

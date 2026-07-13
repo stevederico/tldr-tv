@@ -6,6 +6,7 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { secureHeaders } from 'hono/secure-headers'
 import { cors } from 'hono/cors'
+import { stream } from 'hono/streaming'
 import Stripe from "stripe";
 import crypto from "crypto";
 
@@ -17,8 +18,8 @@ import { synthesizeGuide } from "./tts/tts-pipeline.js";
 import { generateImage, extFromContentType, pLimit } from "./utils/grokImagine.js";
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync } from 'node:fs';
-import { writeFile, mkdir as mkdirP } from 'node:fs/promises';
+import { readFile, mkdir, stat, readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { writeFile, mkdir as mkdirP, rm } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import type { BackendConfig, BoundDatabase, CsrfTokenEntry, DatabaseConfig, JwtPayload, Logger, Subscription, UserSetFields, Guide, GuideInput, GuideChapter, GuideTiming } from './types.ts';
 import { createLogger } from './lib/logger.ts';
@@ -672,6 +673,12 @@ app.use('/audio/*', async (c, next) => {
   c.header('Cross-Origin-Resource-Policy', 'cross-origin');
 });
 app.use('/images/*', async (c, next) => {
+  await next();
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin');
+});
+// The live TTS stream is played by the extension PiP's <audio> on a
+// chrome-extension:// origin — same cross-origin embedding as /audio/*.
+app.use('/api/guides/:slug/stream.mp3', async (c, next) => {
   await next();
   c.header('Cross-Origin-Resource-Policy', 'cross-origin');
 });
@@ -1492,9 +1499,126 @@ app.post("/api/guides/:slug/tts", async (c) => {
   }
 });
 
+// Progressive audio stream: serve each TTS chunk's MP3 as soon as it renders so
+// the player starts within ~1-2s instead of waiting for the full guide. Once
+// the canonical file exists we redirect to it (Range-seekable). Concatenating
+// the per-chunk MP3s (Xing header suppressed) yields a valid playable stream.
+app.get('/api/guides/:slug/stream.mp3', async (c) => {
+  const slug = c.req.param('slug');
+  if (!SLUG_REGEX.test(slug)) return c.json({ error: 'Invalid slug' }, 400);
+
+  const audioDir = resolve(__dirname, './public/audio');
+  const canonical = resolve(audioDir, `${slug}.mp3`);
+  // Finished render → hand off to the static file (supports Range/seeking).
+  if (existsSync(canonical)) return c.redirect(`/audio/${slug}.mp3`, 302);
+
+  const partsDir = ttsPartsDir(audioDir, slug);
+  if (!readTtsState(partsDir)) return c.json({ error: 'Not generating' }, 404);
+
+  c.header('Content-Type', 'audio/mpeg');
+  c.header('Cache-Control', 'no-store');
+  // Defeat proxy buffering so chunks reach the client as they're written.
+  c.header('X-Accel-Buffering', 'no');
+
+  const POLL_MS = 150;
+  const MAX_IDLE_MS = 120_000;
+  return stream(c, async (s) => {
+    let idx = 0;
+    let idleMs = 0;
+    while (!s.aborted) {
+      const partPath = ttsPartPath(partsDir, idx);
+      const decision = __testTtsStreamNext(idx, existsSync(partPath), readTtsState(partsDir));
+      if (decision === 'write') {
+        try {
+          await s.write(readFileSync(partPath));
+        } catch {
+          break; // client went away
+        }
+        idx++;
+        idleMs = 0;
+        continue;
+      }
+      if (decision === 'end') break;
+      if (idleMs >= MAX_IDLE_MS) break; // stalled render — don't hang forever
+      await s.sleep(POLL_MS);
+      idleMs += POLL_MS;
+    }
+  });
+});
+
+/**
+ * Pure state-machine step for the TTS stream loop: given the next part index,
+ * whether that part file exists, and the current stream state, decide whether
+ * to write the part, wait for it, or end the stream. Extracted for unit testing.
+ *
+ * @param idx - Next part index the stream wants to send
+ * @param partExists - Whether `<idx>.mp3` exists on disk
+ * @param state - Current streaming state, or null when the state file is gone
+ * @returns 'write' to send the part, 'end' to close, 'wait' to poll again
+ */
+export function __testTtsStreamNext(
+  idx: number,
+  partExists: boolean,
+  state: TtsStreamState | null
+): 'write' | 'end' | 'wait' {
+  if (partExists) return 'write';
+  if (!state || state.failed) return 'end';
+  if (state.done && idx >= state.chunksDone) return 'end'; // all parts flushed
+  return 'wait';
+}
+
+/** Live state of an in-progress streaming TTS render, persisted per slug. */
+interface TtsStreamState {
+  /** Total source chunks (0 until the first onProgress). */
+  chunksTotal: number;
+  /** Chunks whose MP3 part has been written. */
+  chunksDone: number;
+  /** All parts written and canonical file persisted. */
+  done: boolean;
+  /** Synthesis failed — streaming clients should stop. */
+  failed: boolean;
+}
+
+/** Directory holding a slug's streaming MP3 parts + state.json. */
+function ttsPartsDir(audioDir: string, slug: string): string {
+  return resolve(audioDir, `${slug}.parts`);
+}
+
+/** Zero-padded part path, e.g. `007.mp3`. */
+function ttsPartPath(partsDir: string, index: number): string {
+  return resolve(partsDir, `${String(index).padStart(3, '0')}.mp3`);
+}
+
+/** Write the streaming state file (best-effort, never throws). */
+function writeTtsState(partsDir: string, state: TtsStreamState): void {
+  try {
+    writeFileSync(resolve(partsDir, 'state.json'), JSON.stringify(state));
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Read the streaming state file, or null when absent/corrupt. */
+function readTtsState(partsDir: string): TtsStreamState | null {
+  try {
+    const raw = readFileSync(resolve(partsDir, 'state.json'), 'utf8');
+    const s = JSON.parse(raw) as Partial<TtsStreamState>;
+    return {
+      chunksTotal: Number(s.chunksTotal) || 0,
+      chunksDone: Number(s.chunksDone) || 0,
+      done: s.done === true,
+      failed: s.failed === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Background TTS job: synthesize the full transcript and persist results.
  * Updates Guides.jobs_json on progress and on terminal state (done/failed).
+ * Also writes each chunk's MP3 to `<slug>.parts/` as it renders so the stream
+ * endpoint can start playback before the full render finishes.
  *
  * @param {string} slug
  * @param {Object} guide - The guide payload at job kickoff
@@ -1502,10 +1626,17 @@ app.post("/api/guides/:slug/tts", async (c) => {
  */
 async function runTtsJob(slug: string, guide: Guide): Promise<void> {
   const t0 = Date.now();
+  const audioDir = resolve(__dirname, './public/audio');
+  const partsDir = ttsPartsDir(audioDir, slug);
   try {
-    const audioDir = resolve(__dirname, './public/audio');
     await mkdirP(audioDir, { recursive: true });
     const outPath = resolve(audioDir, `${slug}.mp3`);
+
+    // Fresh parts dir for the streaming artifacts (clear any stale prior run).
+    await rm(partsDir, { recursive: true, force: true }).catch(() => {});
+    await mkdirP(partsDir, { recursive: true });
+    const state: TtsStreamState = { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
+    writeTtsState(partsDir, state);
 
     const { audioMp3, words, totalDuration, transcript: normalizedTranscript } = await synthesizeGuide({
       transcript: guide.transcript ?? '',
@@ -1513,9 +1644,22 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
         // Best-effort progress write — errors here shouldn't kill the job.
         db.updateGuideJob(slug, 'tts', { chunksDone, chunksTotal }).catch(() => {});
       },
+      onChunk: (mp3, { index, chunksTotal }) => {
+        // Write this chunk's standalone MP3 so streaming clients can play it
+        // immediately. Sequential + awaited in the pipeline, so no races here.
+        writeFileSync(ttsPartPath(partsDir, index), mp3);
+        state.chunksTotal = chunksTotal;
+        state.chunksDone = index + 1;
+        writeTtsState(partsDir, state);
+      },
     });
 
     await writeFile(outPath, audioMp3);
+    // Canonical file is ready — mark parts done so streams drain and finish,
+    // then drop the parts dir after a grace period for any in-flight readers.
+    state.done = true;
+    writeTtsState(partsDir, state);
+    scheduleTtsPartsCleanup(partsDir);
 
     // Persist the normalized transcript so the frontend tokenizer produces the
     // same tokens (em/en dashes are split out) as the timing stream — otherwise
@@ -1538,6 +1682,10 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
     logger.info('TTS job done', { slug, durationSec: totalDuration, words: words.length, ms: Date.now() - t0 });
   } catch (err) {
     logger.error('TTS job failed', { slug, error: (err as Error).message });
+    // Signal streaming clients to stop, then clean up partial artifacts.
+    const failed = readTtsState(partsDir) ?? { chunksTotal: 0, chunksDone: 0, done: false, failed: false };
+    writeTtsState(partsDir, { ...failed, failed: true });
+    scheduleTtsPartsCleanup(partsDir);
     await db.updateGuideJob(slug, 'tts', {
       status: 'failed',
       error: (err as Error).message || 'Unknown error',
@@ -1545,6 +1693,22 @@ async function runTtsJob(slug: string, guide: Guide): Promise<void> {
       finishedAt: Date.now(),
     }).catch(() => {});
   }
+}
+
+/** Grace period before deleting streaming parts so in-flight readers drain. */
+const TTS_PARTS_CLEANUP_MS = 60_000;
+
+/**
+ * Remove a slug's streaming parts dir after a grace period. Once the canonical
+ * `<slug>.mp3` exists the stream endpoint redirects to it, so lingering parts
+ * only serve readers that connected mid-render.
+ *
+ * @param partsDir - The `<slug>.parts` directory to remove
+ */
+function scheduleTtsPartsCleanup(partsDir: string): void {
+  setTimeout(() => {
+    rm(partsDir, { recursive: true, force: true }).catch(() => {});
+  }, TTS_PARTS_CLEANUP_MS).unref?.();
 }
 
 // Re-scrape the source URL to fill in / refresh guide.date.

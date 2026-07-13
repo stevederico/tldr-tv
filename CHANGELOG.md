@@ -6,6 +6,11 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.82.0
+
+  Stream TTS audio
+  Fast playback start
+
 0.81.0
 
   Add PiP captions

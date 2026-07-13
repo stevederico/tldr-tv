@@ -1,7 +1,7 @@
 {
   "name": "book-player",
   "private": false,
-  "version": "0.81.0",
+  "version": "0.82.0",
   "skateboardVersion": "4.11.0",
   "type": "module",
   "workspaces": [

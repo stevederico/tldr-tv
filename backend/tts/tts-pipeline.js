@@ -205,6 +205,13 @@ function chunkBySentence(text, maxChars = MAX_CHUNK_CHARS) {
  * @param {string} [args.voice='af_heart'] - Kokoro voice id
  * @param {number} [args.speed=1] - Speech rate
  * @param {function({chunksDone: number, chunksTotal: number}): void} [args.onProgress]
+ * @param {function(Buffer, {index: number, chunksDone: number, chunksTotal: number}): (void | Promise<void>)} [args.onChunk]
+ *   Called once per source chunk with that chunk's audio as a standalone MP3
+ *   (Xing header suppressed) as soon as it renders — used to stream playback
+ *   before the full guide finishes. Concatenating these in order yields a
+ *   playable stream. The canonical `audioMp3` return value is still a single
+ *   sample-accurate encode; onChunk is a delivery optimization, not the source
+ *   of truth. Awaited, so a slow writer backpressures synthesis.
  * @returns {Promise<{audioMp3: Buffer, words: Array<{w: string, t: number}>, totalDuration: number, sampleRate: number, transcript: string}>}
  *          `audioMp3` is 64kbps mono MP3 — the pipeline renders WAV internally
  *          for sample-accurate splicing, then transcodes once at the very end.
@@ -212,7 +219,7 @@ function chunkBySentence(text, maxChars = MAX_CHUNK_CHARS) {
  *          the caller should persist it so the displayed transcript stays
  *          tokenized the same way as the timing stream.
  */
-export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 1, onProgress }) {
+export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 1, onProgress, onChunk }) {
   if (!transcript || transcript.length < 50) throw new Error('Transcript too short');
 
   // Normalize once up front. The caller should persist this back so the
@@ -229,6 +236,9 @@ export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 
   let done = 0;
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i];
+    // Track which wavs this source chunk contributes so onChunk can emit just
+    // this chunk's audio as a standalone MP3 for streaming.
+    const chunkWavStart = wavs.length;
     const result = await synthesizeWithFallback(chunk.text, { voice, speed });
     for (let segIdx = 0; segIdx < result.length; segIdx++) {
       const segment = result[segIdx];
@@ -297,6 +307,21 @@ export async function synthesizeGuide({ transcript, voice = 'af_heart', speed = 
     }
     done += 1;
     onProgress?.({ chunksDone: done, chunksTotal });
+
+    // Emit this chunk's audio as a standalone MP3 for streaming. Best-effort:
+    // a streaming failure must not abort the canonical render.
+    if (onChunk) {
+      const chunkWavs = wavs.slice(chunkWavStart);
+      if (chunkWavs.length) {
+        try {
+          const chunkWav = concatWav(chunkWavs, KOKORO_SAMPLE_RATE, { fadeMs: 0 });
+          const chunkMp3 = await wavToMp3(chunkWav, { xing: false });
+          await onChunk(chunkMp3, { index: i, chunksDone: done, chunksTotal });
+        } catch (err) {
+          console.error(`[tts] onChunk failed for chunk ${i}:`, err instanceof Error ? err.message : err);
+        }
+      }
+    }
   }
 
   // fadeMs:0 — every seam in this pipeline is wav→silence→wav, so the
