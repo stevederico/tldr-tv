@@ -68,6 +68,8 @@ let streamStarted = false;
 // --- Captions + word highlighting (ported from the web PlayerView) ---
 /** Lead the highlight so the word lights as it is heard, not after. */
 const HIGHLIGHT_LEAD = 0.27;
+/** @type {import('./transcript.js').TranscriptParagraph[] | null} */
+let transcriptParas = null;
 /** @type {import('./transcript.js').CaptionChunk[] | null} */
 let captionChunks = null;
 /** @type {number[] | null} */
@@ -76,7 +78,10 @@ let wordStartTimes = null;
 let anchors = null;
 let totalWords = 0;
 let timingOffset = 0;
-let transcriptReady = false;
+/** Transcript parsed into paragraphs/chunks (done once). */
+let transcriptParsed = false;
+/** Real per-word timings aligned (done once timing arrives — may lag transcript). */
+let timingAligned = false;
 let captionsOn = safeGet('pip.cc') !== '0';
 let highlightOn = safeGet('pip.hl') !== '0';
 let lastCaptionKey = '';
@@ -214,32 +219,45 @@ function buildProgress(jobs) {
 
 /**
  * Parse transcript + timing into caption chunks and per-word start times.
- * Idempotent — runs once as soon as the transcript is present.
+ *
+ * Runs on every guide poll but does the two halves independently: the
+ * transcript is parsed once (as soon as it's present), while the per-word
+ * timing alignment keeps retrying until real timings arrive. Streaming opens
+ * playback before TTS finishes, so the transcript is available well before
+ * `timing` — latching both together would leave captions frozen at word 0
+ * forever (the timing that lands later would be ignored).
  *
  * @param {Record<string, unknown>} g - Guide payload.
  */
 function buildTranscriptData(g) {
-  if (transcriptReady) return;
   const transcript = typeof g.transcript === 'string' ? g.transcript : '';
-  if (!transcript) return;
-  const paras = parseTranscript(transcript);
-  totalWords = paras.reduce((n, p) => n + p.words.length, 0);
-  captionChunks = buildCaptionChunks(paras);
-  timingOffset = Number(g.timingOffset) || 0;
-
-  const t = g.timing;
-  const timingWords = Array.isArray(t)
-    ? t
-    : t && typeof t === 'object' && Array.isArray(/** @type {{ words?: unknown[] }} */ (t).words)
-      ? /** @type {import('./transcript.js').TimingWord[]} */ (/** @type {{ words: unknown[] }} */ (t).words)
-      : null;
-  wordStartTimes = alignTimings(paras, timingWords);
-  // Fallback: interpolate from chapter quotes when no word timings exist.
-  if (!wordStartTimes) {
-    const chapters = Array.isArray(g.chapters) ? /** @type {Array<{ time?: number, quote?: string }>} */ (g.chapters) : undefined;
-    anchors = buildAnchors(paras, chapters, Number(g.duration) || 0);
+  if (!transcriptParsed && transcript) {
+    transcriptParas = parseTranscript(transcript);
+    totalWords = transcriptParas.reduce((n, p) => n + p.words.length, 0);
+    captionChunks = buildCaptionChunks(transcriptParas);
+    timingOffset = Number(g.timingOffset) || 0;
+    transcriptParsed = true;
   }
-  transcriptReady = true;
+
+  if (transcriptParsed && !timingAligned && transcriptParas) {
+    const t = g.timing;
+    const timingWords = Array.isArray(t)
+      ? t
+      : t && typeof t === 'object' && Array.isArray(/** @type {{ words?: unknown[] }} */ (t).words)
+        ? /** @type {import('./transcript.js').TimingWord[]} */ (/** @type {{ words: unknown[] }} */ (t).words)
+        : null;
+    const aligned = alignTimings(transcriptParas, timingWords);
+    if (aligned) {
+      wordStartTimes = aligned;
+      timingAligned = true;
+    } else {
+      // No word timings yet. Interpolate from chapter quotes if the guide is
+      // already playable (duration + chapters known); otherwise leave captions
+      // hidden until real timings land rather than freezing on word 0.
+      const chapters = Array.isArray(g.chapters) ? /** @type {Array<{ time?: number, quote?: string }>} */ (g.chapters) : undefined;
+      anchors = buildAnchors(transcriptParas, chapters, Number(g.duration) || 0);
+    }
+  }
 }
 
 /**
@@ -248,7 +266,11 @@ function buildTranscriptData(g) {
  */
 function renderCaption() {
   if (!(captionEl instanceof HTMLElement)) return;
-  if (!captionsOn || !captionChunks?.length || !(audioEl instanceof HTMLAudioElement)) {
+  // Need captions on, chunks parsed, audio present, AND a real timing source
+  // (per-word times or chapter anchors). Without timings the word index would
+  // pin to 0 and the caption would freeze on the first line — hide instead.
+  const hasTiming = !!wordStartTimes || !!anchors;
+  if (!captionsOn || !captionChunks?.length || !hasTiming || !(audioEl instanceof HTMLAudioElement)) {
     if (!captionEl.hidden) {
       captionEl.hidden = true;
       captionEl.textContent = '';

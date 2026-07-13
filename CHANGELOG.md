@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.82.1
+
+  Fix frozen captions
+
 0.82.0
 
   Stream TTS audio
