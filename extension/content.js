@@ -5,8 +5,9 @@
   const HOST_ID = 'watch-this-article-pip-host';
   const DEFAULT_W = 560;
   const DEFAULT_H = 360;
-  const MIN_W = 360;
-  const MIN_H = 240;
+  const BAR_H = 32;
+  const MIN_W = 320;
+  const MIN_H = 220;
 
   function closePip() {
     document.getElementById(HOST_ID)?.remove();
@@ -26,19 +27,22 @@
       right: '20px',
       bottom: '20px',
       width: `${DEFAULT_W}px`,
-      height: `${DEFAULT_H + 32}px`,
+      height: `${DEFAULT_H + BAR_H}px`,
       zIndex: '2147483646',
       borderRadius: '12px',
+      // overflow auto/hidden required for CSS resize; also clips the iframe
       overflow: 'hidden',
+      resize: 'both',
       boxShadow: '0 16px 48px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08)',
       background: '#000',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: 'ui-sans-serif, system-ui, sans-serif',
       minWidth: `${MIN_W}px`,
-      minHeight: `${MIN_H + 32}px`,
-      maxWidth: 'min(920px, 96vw)',
-      maxHeight: 'min(720px, 92vh)',
+      minHeight: `${MIN_H + BAR_H}px`,
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      boxSizing: 'border-box',
     });
 
     const bar = document.createElement('div');
@@ -52,8 +56,9 @@
       cursor: 'grab',
       userSelect: 'none',
       flexShrink: '0',
-      height: '32px',
+      height: `${BAR_H}px`,
       boxSizing: 'border-box',
+      zIndex: '3',
     });
 
     const label = document.createElement('span');
@@ -87,21 +92,46 @@
 
     bar.append(label, closeBtn);
 
+    const body = document.createElement('div');
+    Object.assign(body.style, {
+      position: 'relative',
+      flex: '1',
+      minHeight: '0',
+      width: '100%',
+      background: '#000',
+    });
+
     const frame = document.createElement('iframe');
     frame.src = chrome.runtime.getURL(`pip.html?slug=${encodeURIComponent(slug)}`);
     frame.title = 'Watch this article player';
     frame.allow = 'autoplay; fullscreen';
     frame.setAttribute('allowfullscreen', 'true');
-
     Object.assign(frame.style, {
       border: '0',
       width: '100%',
-      flex: '1',
+      height: '100%',
+      display: 'block',
       background: '#000',
-      minHeight: '0',
     });
 
-    // Drag
+    // Large SE resize grip above the iframe so pointer events aren't eaten
+    const handle = document.createElement('div');
+    handle.setAttribute('aria-label', 'Resize player');
+    handle.title = 'Drag to resize';
+    Object.assign(handle.style, {
+      position: 'absolute',
+      right: '0',
+      bottom: '0',
+      width: '28px',
+      height: '28px',
+      cursor: 'nwse-resize',
+      zIndex: '10',
+      touchAction: 'none',
+      background:
+        'linear-gradient(135deg, transparent 0 48%, rgba(255,255,255,0.25) 48% 52%, transparent 52% 62%, rgba(255,255,255,0.45) 62% 66%, transparent 66% 76%, rgba(255,255,255,0.7) 76% 80%, transparent 80%)',
+    });
+
+    // Drag window
     let dragging = false;
     let startX = 0;
     let startY = 0;
@@ -125,8 +155,8 @@
     });
     bar.addEventListener('pointermove', (e) => {
       if (!dragging) return;
-      host.style.left = `${Math.max(8, origLeft + e.clientX - startX)}px`;
-      host.style.top = `${Math.max(8, origTop + e.clientY - startY)}px`;
+      host.style.left = `${Math.max(0, origLeft + e.clientX - startX)}px`;
+      host.style.top = `${Math.max(0, origTop + e.clientY - startY)}px`;
     });
     bar.addEventListener('pointerup', (e) => {
       dragging = false;
@@ -138,27 +168,25 @@
       }
     });
 
-    // Resize handle (bottom-right)
-    const handle = document.createElement('div');
-    handle.setAttribute('aria-label', 'Resize player');
-    handle.title = 'Resize';
-    Object.assign(handle.style, {
-      position: 'absolute',
-      right: '0',
-      bottom: '0',
-      width: '18px',
-      height: '18px',
-      cursor: 'nwse-resize',
-      zIndex: '2',
-      background:
-        'linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.35) 50%)',
-    });
-
+    // Manual resize (works even when CSS resize is ignored by the host page)
     let resizing = false;
     let rStartX = 0;
     let rStartY = 0;
     let rW = DEFAULT_W;
-    let rH = DEFAULT_H + 32;
+    let rH = DEFAULT_H + BAR_H;
+
+    /**
+     * @param {number} nw
+     * @param {number} nh
+     */
+    function applySize(nw, nh) {
+      const maxW = window.innerWidth - 8;
+      const maxH = window.innerHeight - 8;
+      const w = Math.min(maxW, Math.max(MIN_W, nw));
+      const h = Math.min(maxH, Math.max(MIN_H + BAR_H, nh));
+      host.style.width = `${w}px`;
+      host.style.height = `${h}px`;
+    }
 
     handle.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -169,7 +197,6 @@
       const rect = host.getBoundingClientRect();
       rW = rect.width;
       rH = rect.height;
-      // pin top-left while resizing from SE
       host.style.right = 'auto';
       host.style.bottom = 'auto';
       host.style.left = `${rect.left}px`;
@@ -178,10 +205,8 @@
     });
     handle.addEventListener('pointermove', (e) => {
       if (!resizing) return;
-      const nw = Math.max(MIN_W, rW + (e.clientX - rStartX));
-      const nh = Math.max(MIN_H + 32, rH + (e.clientY - rStartY));
-      host.style.width = `${nw}px`;
-      host.style.height = `${nh}px`;
+      e.preventDefault();
+      applySize(rW + (e.clientX - rStartX), rH + (e.clientY - rStartY));
     });
     handle.addEventListener('pointerup', (e) => {
       resizing = false;
@@ -191,9 +216,12 @@
         /* ignore */
       }
     });
+    handle.addEventListener('pointercancel', () => {
+      resizing = false;
+    });
 
-    host.style.position = 'fixed';
-    host.append(bar, frame, handle);
+    body.append(frame, handle);
+    host.append(bar, body);
     document.documentElement.appendChild(host);
   }
 
