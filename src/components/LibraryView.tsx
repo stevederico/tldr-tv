@@ -335,7 +335,7 @@ export default function LibraryView() {
               <line x1="0" y1="14" x2="14" y2="0" stroke="white" strokeWidth="1" />
             </svg>
           </span>
-          <span className="font-['Bricolage_Grotesque'] font-extrabold text-[1.1rem] tracking-[-0.03em]">Book Player</span>
+          <span className="font-['Bricolage_Grotesque'] font-extrabold text-[1.1rem] tracking-[-0.03em]">Watch It</span>
         </div>
         <div className="max-w-[560px] w-full sm:justify-self-center col-span-2 sm:col-span-1 sm:col-start-2 row-start-2 sm:row-start-1 order-3 sm:order-none">
           <input

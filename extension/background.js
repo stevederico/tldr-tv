@@ -9,7 +9,7 @@ import { getConfig } from './config.js';
  */
 
 /**
- * POST extracted article to the book-player API and return the new slug.
+ * POST extracted article to the watch-it API and return the new slug.
  *
  * @param {ExtractedArticle} article
  * @returns {Promise<{ slug: string }>}

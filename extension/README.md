@@ -1,6 +1,6 @@
 # Watch this article (Chrome extension)
 
-Chrome MV3 extension for Book Player. On any open article: extract text → `POST /api/guides` → open the player. Pipeline (TTS, images, chapters) stays on the backend.
+Chrome MV3 extension for Watch It. On any open article: extract text → `POST /api/guides` → open the player. Pipeline (TTS, images, chapters) stays on the backend.
 
 ## Load unpacked (dev)
 

@@ -84,7 +84,7 @@ export function __setProviderLoadersForTests(loaders: {
 }
 
 /**
- * Narrow a provider to the subset that implements the book-player guide
+ * Narrow a provider to the subset that implements the watch-it guide
  * methods. Only SQLiteProvider does; throws if the active provider (e.g.
  * PostgreSQL/MongoDB) was configured without guide support.
  */

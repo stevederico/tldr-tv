@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" aria-labelledby="title">
-  <title>Book Player</title>
+  <title>Watch It</title>
   <!-- Book base / cover (deep navy) -->
   <rect x="2" y="3" width="20" height="18" rx="2" ry="2" fill="#1e3a8a"/>
   <!-- Left page (cream) -->

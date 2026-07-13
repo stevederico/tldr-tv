@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.84.0
+
+  Rename to Watch It
+
 0.83.1
 
   Fix stream popping
