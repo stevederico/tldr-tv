@@ -1,6 +1,6 @@
 # Competitors
 
-Research on products that turn **text / articles / sources into video or watchable media**.
+Research on products near **text / articles → listen or watch**.
 
 **Last researched:** 2026-07-13  
 **Our product (working):** narrated, illustrated long-form from full text — word-synced transcript, chapter/beat images, browser “Watch this article” extension; MP4 export on roadmap.
@@ -9,47 +9,85 @@ Research on products that turn **text / articles / sources into video or watchab
 
 | Cluster | Products | Job |
 |---|---|---|
-| Marketer blog → social clip | [Lumen5](lumen5.md), [Pictory](pictory.md), [InVideo](invideo.md), [Fliki](fliki.md) | Repurpose blog/script into short branded video for LinkedIn/YouTube/ads |
-| Research / learning overview | [NotebookLM](notebooklm.md) | Summarize *your* sources into Audio/Video Overviews (study, not publish) |
-| Prompt cinema (out of scope here) | Sora, Runway, Kling, Seedance | Generate novel video from prompts — not faithful article playback |
+| **Listen to this page** | [Speechify](speechify.md), [Readwise Reader](readwise-reader.md), [ElevenLabs Reader](elevenlabs.md) | Instant or library TTS of full web/docs |
+| **Word-level media UX** | [Descript](descript.md) | Edit A/V by editing transcript |
+| **Research overview** | [NotebookLM](notebooklm.md), [Illuminate](google-illuminate.md) | Summarize sources → audio/video show |
+| **Publisher audio** | [BeyondWords](beyondwords.md) | CMS embed: audio for every article |
+| **AI podcast from docs** | [Wondercraft](wondercraft.md) | Doc/URL → produced podcast (+ video) |
+| **Marketer blog → clip** | [Lumen5](lumen5.md), [Pictory](pictory.md), [InVideo](invideo.md), [Fliki](fliki.md), [Steve AI](steve-ai.md), [VEED](veed.md), [Typeframes](typeframes.md), [Canva](canva-magic-studio.md) | Social/marketing video from text |
+| **Avatar presenter** | [Synthesia / HeyGen](synthesia-heygen.md) | Script → talking head |
+| Prompt cinema (out of scope) | Sora, Runway, Kling, Seedance | Novel video from prompts |
 
-## Snapshot matrix
+## Threat ranking (for us)
 
-| | Lumen5 | Pictory | InVideo | Fliki | NotebookLM Video |
+| Rank | Product | Why |
+|---|---|---|
+| 1 | **Speechify** | Owns “listen to this page” + highlight-while-reading + extension |
+| 2 | **NotebookLM** | Free Google “watch/listen instead of read” (summary) |
+| 3 | **Readwise Reader** | Full-text library + TTS for serious readers |
+| 4 | **ElevenLabs** | Voice quality bar + Reader/Studio long-form audio |
+| 5 | **Descript** | Sets expectation for word↔time UX (not same funnel) |
+| 6 | **Wondercraft / Illuminate** | Doc → podcast show |
+| 7 | **Pictory** | Best marketer URL→video |
+| 8 | **BeyondWords** | Publisher-side listen embeds |
+| 9+ | Lumen5, InVideo, Fliki, Steve, VEED, Canva, Typeframes, avatars | Category noise / different buyer |
+
+## Snapshot: must-watch set
+
+| | Speechify | Readwise | NotebookLM | Descript | ElevenLabs |
 |---|---|---|---|---|---|
-| **Buyer** | Marketing / comms teams | Marketers, L&D, creators | Creators + agencies | Creators, multilingual | Students, researchers, teams |
-| **Input** | Blog, PDF, bullets, script | URL, script, PPT, long video | Prompt, script, URL | Script, blog URL, PPT, idea | Uploaded sources (docs, URLs, PDFs) |
-| **Output** | Stock-scene social video | Stock + gen AI + avatar clips | Stock + gen models (Veo, Kling, etc.) | TTS + stock + avatar video | Narrated explainer / cinematic summary |
-| **Fidelity to source** | Low–medium (scene chunks) | Low–medium (summarize/repurpose) | Low (often rewrite) | Low–medium | **Summary by design** |
-| **Word-level sync** | No | Captions/auto-subtitles | Captions | Captions | No (overview, not full text) |
-| **Open-web “this page”** | Paste / import content | Blog URL import | URL workflows | Blog URL | User must add sources |
-| **Primary length** | Short–mid marketing | Short–~30 min export caps | Short social / gen clips | Short–mid (plan caps) | ~1 min short → longer explainers |
-| **Monetization** | SaaS $19–$149+/mo | SaaS ~$25–$199+/mo | Credits + SaaS ~$17–$900+/mo | SaaS free → ~$21–$88/mo | Free + Google AI tiers (Cinematic = Ultra) |
-| **Export** | MP4 social formats | MP4 multi-aspect | MP4 / generative | MP4 | Download video / share notebook |
+| **Buyer** | Mass consumer | Power reader | Student/knowledge | Creator/editor | Dev + listener |
+| **Full-text fidelity** | High (reads page) | High | **Summary** | N/A (your media) | High in Studio |
+| **Word highlight** | Yes | TTS follow | No | **Core product** | Player-dependent |
+| **Open-web extension** | **Yes** | Save/highlight | No | No | Limited |
+| **Visuals / video** | Expanding | No | **Video Overviews** | Full editor | Audio-first |
+| **Price anchor** | ~$29/mo or ~$139/yr | ~$10–13/mo | Free + Google AI | ~$16–50/mo | Usage + sub |
 
 ## Us vs them (positioning)
 
 | They optimize for | We optimize for |
 |---|---|
-| **Shareable marketing asset** | **Faithful listen/watch of the piece** |
-| Summarize / scene-break text | Full transcript + word timings |
-| Stock B-roll + logo kit | Chapter/beat images tied to the text |
-| Creator publishes *about* the article | Reader watches *the* article |
-| Desktop SaaS project | Browser extension + player library |
+| Listen **or** short social video **or** summary show | **Watch the full piece** (audio + images + sync) |
+| Stock/avatar marketing aesthetics | Chapter/beat images tied to the text |
+| Save-for-later library **or** editor project | One-tap pipeline from current page |
+| Metered minutes/credits for export | Personal guide library + player |
 
-**Not competing head-on** with Lumen5-class tools unless we chase “export 30s LinkedIn clip from blog.” Closest existential pressure: **NotebookLM** (free, Google, “watch instead of read”) and any future **browser-native listen/watch** from platforms.
+**Counter-lines:**
+- vs Speechify: “Not just listen — **watch**.”  
+- vs NotebookLM: “Not a summary — **the article**.”  
+- vs Pictory/Lumen5: “Not a LinkedIn clip — **the whole essay**.”  
+- vs Descript: “We **make** the media; they polish recordings.”  
+- vs BeyondWords: “Reader-initiated any page, not publisher CMS only.”
 
 ## Recommended monitoring
 
-1. NotebookLM Video / Cinematic Overviews — quality, length, public share, URL-in
-2. Pictory blog-to-video + URL fidelity
-3. InVideo model bundle pricing (commodity gen-video)
-4. Fliki voice quality / clone (TTS bar)
+1. Speechify — podcasts, video gen, extension quality  
+2. NotebookLM — Video/Cinematic Overviews, URL-in, length, free quotas  
+3. Readwise — TTS voices, product velocity  
+4. ElevenLabs — Reader features, price/quality  
+5. Descript — anything that becomes “URL → project”  
+6. BeyondWords — major publisher rollouts  
+7. Pictory — blog URL fidelity  
 
 ## Files
 
+### Priority (listen / watch / fidelity)
+- [speechify.md](speechify.md)
+- [readwise-reader.md](readwise-reader.md)
+- [notebooklm.md](notebooklm.md)
+- [google-illuminate.md](google-illuminate.md)
+- [descript.md](descript.md)
+- [elevenlabs.md](elevenlabs.md)
+- [wondercraft.md](wondercraft.md)
+- [beyondwords.md](beyondwords.md)
+
+### Marketer / gen video shelf
 - [lumen5.md](lumen5.md)
 - [pictory.md](pictory.md)
 - [invideo.md](invideo.md)
 - [fliki.md](fliki.md)
-- [notebooklm.md](notebooklm.md)
+- [steve-ai.md](steve-ai.md)
+- [veed.md](veed.md)
+- [typeframes.md](typeframes.md)
+- [canva-magic-studio.md](canva-magic-studio.md)
+- [synthesia-heygen.md](synthesia-heygen.md)
