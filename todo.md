@@ -8,7 +8,7 @@ Wedge: open-web “Listen mode with pictures.” Extension first; widget is P5.
 
 - [x] Chrome MV3: content script extracts readable article (title, author, body) from current page
 - [x] Selection fallback on hard/paywalled sites — only what the user can already see/select
-- [x] POST same payload as URL import → poll jobs → open `/app/player/:slug`
+- [x] POST same payload as URL import → poll jobs → open `/app/:slug`
 - [x] Toolbar action: "Watch this article"
 - [x] Never bypass paywalls / login walls
 

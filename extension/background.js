@@ -50,8 +50,9 @@ async function createGuide(article) {
  */
 async function openPlayer(slug) {
   const { appBase } = await getConfig();
+  // Routes are /app/:slug (LibraryView links), not /app/player/:slug — the latter 404s.
   await chrome.tabs.create({
-    url: `${appBase}/app/player/${encodeURIComponent(slug)}`,
+    url: `${appBase}/app/${encodeURIComponent(slug)}`,
   });
 }
 

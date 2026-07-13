@@ -36,7 +36,7 @@ Add matching `host_permissions` in `manifest.json` for non-local hosts.
 - **Selection fallback** — if you select ≥80 chars first, that text is used (paywalled pages you can already read)
 - **No paywall bypass** — only visible/selected DOM text
 - **Create** — same payload shape as the library Create modal
-- **Player** — opens `/app/player/:slug` (pipeline may still be running)
+- **Player** — opens `/app/:slug` (pipeline may still be running)
 
 ## Tests
 
