@@ -6,6 +6,13 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.81.0
+
+  Add PiP captions
+  Highlight words PiP
+  Fix PiP progress
+  Add PiP spinner
+
 0.80.1
 
   Fix PiP audio

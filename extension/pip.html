@@ -13,6 +13,7 @@
         <img id="cover" class="hero-img" alt="" hidden />
 
         <div class="build" id="build" aria-live="polite">
+          <div class="build-spinner" role="status" aria-label="Preparing"></div>
           <p class="build-title" id="buildTitle">Preparing your guide…</p>
           <p class="build-step" id="buildStep">Starting…</p>
           <div
@@ -27,6 +28,9 @@
           </div>
           <p class="build-pct" id="buildPct">0%</p>
         </div>
+
+        <!-- Closed captions (karaoke word-highlight when enabled) -->
+        <div class="caption" id="caption" aria-live="polite" hidden></div>
 
         <div class="overlay" id="overlay" data-overlay>
           <div class="timeline" id="timeline">
@@ -52,6 +56,15 @@
                 </svg>
               </button>
               <div class="menu" id="settingsMenu" role="menu" hidden>
+                <p class="menu-label">Display</p>
+                <button type="button" class="menu-item menu-toggle" id="ccToggle" data-toggle="cc" role="menuitemcheckbox" aria-checked="true">
+                  <span>Captions</span>
+                  <svg class="menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+                </button>
+                <button type="button" class="menu-item menu-toggle" id="hlToggle" data-toggle="hl" role="menuitemcheckbox" aria-checked="true">
+                  <span>Highlight words</span>
+                  <svg class="menu-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12" /></svg>
+                </button>
                 <p class="menu-label">Playback speed</p>
                 <button type="button" class="menu-item" data-rate="0.75" role="menuitem">0.75×</button>
                 <button type="button" class="menu-item" data-rate="1" role="menuitem">Normal</button>

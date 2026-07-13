@@ -8,7 +8,7 @@ Chrome MV3 extension for Book Player. On any open article: extract text → `POS
 2. Chrome → `chrome://extensions` → Developer mode → **Load unpacked**
 3. Select this `extension/` folder
 4. Open a free article (blog, Substack, etc.) → click the extension → **Watch this article**
-5. A **floating PiP** appears on the blog page (no redirect). Drag the title bar; **Full** opens the full player; **×** closes.
+5. A **floating PiP** appears on the blog page (no redirect). Captions + word highlight and playback speed live in the gear menu; the external-link icon opens the **Full** player; hover the top-right **×** to close.
 6. After reloading the extension, reload the article tab if the content script was stale
 
 ## Config
@@ -39,7 +39,9 @@ Add matching `host_permissions` in `manifest.json` for non-local hosts.
 - **Create** — same payload shape as the library Create modal
 - **PiP (default)** — large resizable floating player on the blog (YouTube-style chrome)
 - **Blog images first** — page/og images while Grok art generates; then both rotate
-- **Autoplay** when audio is ready; progress bar for analyze / TTS / images
+- **Captions + word highlight** — karaoke-style captions synced to the audio; toggle both in the settings (gear) menu, persisted in `localStorage` (`pip.cc` / `pip.hl`)
+- **Preparing state** — animated spinner + progress bar (analyze + TTS, summed so it never sticks)
+- **Autoplay** when audio is ready
 - **Full** — open `/app/:slug` from the PiP
 
 ## Tests
