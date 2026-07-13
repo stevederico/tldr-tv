@@ -385,10 +385,11 @@ Skateboard uses an **Application Shell Architecture** where skateboard-ui provid
 ### Project Structure
 ```
 book-player/
+├── extension/                # Chrome MV3 "Watch this article" (see extension/README.md)
 ├── src/
 │   ├── components/
-│   │   ├── LibraryView.jsx   # / — guide catalog (fetches /api/guides)
-│   │   └── PlayerView.jsx    # /app/player/:slug — audio + transcript player
+│   │   ├── LibraryView.tsx   # / — guide catalog (fetches /api/guides)
+│   │   └── PlayerView.tsx    # /app/player/:slug — audio + transcript player
 │   ├── assets/{styles.css, pg.css}
 │   ├── main.tsx              # Routes
 │   └── constants.json

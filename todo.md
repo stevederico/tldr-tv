@@ -6,11 +6,11 @@ Priority order: top = do next. Same engine for everything; shells and polish sta
 
 Wedge: open-web “Listen mode with pictures.” Extension first; widget is P5.
 
-- [ ] Chrome MV3: content script extracts readable article (title, author, body) from current page
-- [ ] Selection fallback on hard/paywalled sites — only what the user can already see/select
-- [ ] POST same payload as URL import → poll jobs → open `/app/player/:slug`
-- [ ] Toolbar action: "Watch this article"
-- [ ] Never bypass paywalls / login walls
+- [x] Chrome MV3: content script extracts readable article (title, author, body) from current page
+- [x] Selection fallback on hard/paywalled sites — only what the user can already see/select
+- [x] POST same payload as URL import → poll jobs → open `/app/player/:slug`
+- [x] Toolbar action: "Watch this article"
+- [x] Never bypass paywalls / login walls
 
 ## P1 — Make it feel like “watch” (not just listen)
 

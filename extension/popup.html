@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Watch this article</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Watch this article</h1>
+      <p class="sub">Turn the current page into illustrated audio.</p>
+
+      <button type="button" id="watch" class="btn">
+        Watch this article
+      </button>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <p class="hint">
+        On paywalled pages, select the readable text first — we never bypass
+        logins.
+      </p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
