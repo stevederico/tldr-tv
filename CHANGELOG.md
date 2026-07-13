@@ -6,6 +6,10 @@
   Dash-prefixed items = still open (todo list).
 -->
 
+0.90.0
+
+  Faster stream start
+
 0.89.0
 
   Blue play icon

@@ -78,10 +78,12 @@ let wantPlaying = false;
 // True while we deliberately paused to wait for more progressive-stream bytes.
 // Distinct from user pause so we auto-resume without fighting the play button.
 let rebuffering = false;
-/** Seconds of buffered audio required before the first autoplay on a live stream. */
-const MIN_START_BUFFER_SEC = 12;
+/** Seconds of buffered audio required before the first autoplay on a live
+ *  stream. Kept small for a fast (~2-3s) start; the rebuffer net below catches
+ *  the rare case where the playhead outruns the still-generating frontier. */
+const MIN_START_BUFFER_SEC = 3;
 /** Seconds of headroom required before resuming after a rebuffer pause. */
-const MIN_RESUME_BUFFER_SEC = 8;
+const MIN_RESUME_BUFFER_SEC = 4;
 /** If headroom falls below this while streaming, pause and rebuffer. */
 const REBUFFER_FLOOR_SEC = 1.5;
 
@@ -512,12 +514,13 @@ function applyGuide(guide) {
   if (Number.isFinite(duration) && duration > 0) knownDuration = duration;
   const playable = audioPath.length > 0 && Number.isFinite(duration) && duration > 0;
   const ttsRunning = jobs.tts?.status === 'running';
-  // Attach the progressive stream only after several chunks have landed on
-  // disk (backend now waits for MP3 flush before bumping chunksDone). Actual
-  // autoplay still waits for MIN_START_BUFFER_SEC of browser-buffered audio.
+  // Attach the progressive stream as soon as the first chunk lands on disk
+  // (backend waits for MP3 flush before bumping chunksDone), so the browser
+  // starts buffering immediately. Actual autoplay still waits for
+  // MIN_START_BUFFER_SEC of browser-buffered audio, gating the real start.
   const chunksDone = Number(jobs.tts?.chunksDone) || 0;
   const chunksTotal = Number(jobs.tts?.chunksTotal) || 0;
-  const leadReady = chunksDone >= 3 || (chunksTotal > 0 && chunksDone >= chunksTotal);
+  const leadReady = chunksDone >= 1 || (chunksTotal > 0 && chunksDone >= chunksTotal);
 
   if (streamStarted && audioEl instanceof HTMLAudioElement) {
     // Already on the progressive stream — never swap src (that restarts at 0).
