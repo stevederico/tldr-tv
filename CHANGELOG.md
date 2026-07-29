@@ -1,10 +1,14 @@
 # Changelog
 
 <!--
-  Project changelog for Book Player.
+  Project changelog for TLDR-TV.
   New versions go at the top. Present tense, 3 words or less per item.
   Dash-prefixed items = still open (todo list).
 -->
+0.107.0
+
+  Rename to TLDR-TV
+
 
 0.106.0
 
@@ -115,7 +119,7 @@
 
 0.84.0
 
-  Rename to Watch It
+  Rename to TLDR-TV
 
 0.83.1
 

@@ -60,7 +60,7 @@ Confirm live: https://lumen5.com (pricing may be behind signup).
 - **Summarizes into scenes** — not full-article word-synced narration
 - Stock B-roll look is generic (“AI slideshow”)
 - Optimized for **marketers publishing**, not readers consuming long-form
-- No open-web “Watch this page” consumer wedge
+- No open-web “TLDR this page” consumer wedge
 - No illustrated chapter beats tied to essay structure
 
 ## Overlap with us

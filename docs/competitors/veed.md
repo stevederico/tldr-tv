@@ -59,4 +59,4 @@ Free (watermark/limits) → ~$12–$30/mo personal → business tiers. AI minute
 ## Implications for us
 
 - Subtitle quality and multi-language are table stakes to study  
-- Not a strategic rival for “Watch this article”
+- Not a strategic rival for “TLDR this article”

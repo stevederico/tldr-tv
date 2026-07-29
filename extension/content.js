@@ -63,7 +63,7 @@
 
     const frame = document.createElement('iframe');
     frame.src = chrome.runtime.getURL(`pip.html?slug=${encodeURIComponent(slug)}`);
-    frame.title = 'Watch this article player';
+    frame.title = 'TLDR this article player';
     frame.allow = 'autoplay; fullscreen';
     frame.setAttribute('allowfullscreen', 'true');
     Object.assign(frame.style, {
@@ -275,6 +275,6 @@
       return true;
     });
   } catch (err) {
-    console.error('[Watch this article] content script failed to load', err);
+    console.error('[TLDR this article] content script failed to load', err);
   }
 })();

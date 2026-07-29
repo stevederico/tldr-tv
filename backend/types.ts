@@ -175,7 +175,7 @@ export interface WebhookEventRecord {
 
 // ==== GUIDE (WATCH-IT) SHAPES ====
 //
-// App-specific domain for watch-it: an audio "guide" with chapters,
+// App-specific domain for tldr-tv: an audio "guide" with chapters,
 // transcript, word timing, and async job state. Only the SQLite adapter
 // implements the guide methods (this app runs SQLite); the methods are
 // optional on DatabaseProvider so the unused PostgreSQL/MongoDB adapters
@@ -506,7 +506,7 @@ export interface DatabaseProvider<TDb = unknown> {
   execute(db: TDb, queryObject: QueryObject): Promise<ExecuteResult>;
   /** Close every connection this provider holds. */
   closeAll(): void | Promise<void>;
-  // --- Guide methods (watch-it) — implemented by SQLiteProvider only. ---
+  // --- Guide methods (tldr-tv) — implemented by SQLiteProvider only. ---
   /** List guide summaries (no transcript/timing/chapter body), newest-first. */
   listGuides?(db: TDb, filters?: GuideFilters): Promise<GuideSummary[]>;
   /** Fetch one fully-hydrated guide by slug, or null if absent. */
@@ -544,7 +544,7 @@ export interface BoundDatabase {
   findWebhookEvent(eventId: string): Promise<WebhookEventRecord | null>;
   insertWebhookEvent(eventId: string, eventType: string, processedAt: number): Promise<InsertResult>;
   executeQuery(queryObject: QueryObject): Promise<ExecuteResult>;
-  // --- Guide methods (watch-it), pre-bound with dbType/db/connectionString. ---
+  // --- Guide methods (tldr-tv), pre-bound with dbType/db/connectionString. ---
   /** List guide summaries, newest-first. */
   listGuides(filters?: GuideFilters): Promise<GuideSummary[]>;
   /** Fetch one fully-hydrated guide by slug, or null if absent. */

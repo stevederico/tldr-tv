@@ -52,7 +52,7 @@ Still marketed as experimental; product may shift or merge toward NotebookLM Aud
 - Academic/paper skew (less “any news article”)  
 - Availability friction (waitlist, experimental)  
 - No illustrated watch player / chapter art  
-- No browser “Watch this article” for open web  
+- No browser “TLDR this article” for open web  
 
 ## Overlap with us
 

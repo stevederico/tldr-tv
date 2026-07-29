@@ -1,5 +1,5 @@
 /**
- * Article extraction for the Watch this article extension.
+ * Article extraction for the TLDR this article extension.
  * Pure functions — no Chrome APIs — so Node tests can drive them with jsdom.
  *
  * Policy: only visible/selectable page content. Never bypass paywalls.

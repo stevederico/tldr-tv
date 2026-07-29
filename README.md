@@ -1,5 +1,5 @@
 <div align="center">
-  <h1 align="center" style="border-bottom: none; margin-bottom: 0;">Watch It</h1>
+  <h1 align="center" style="border-bottom: none; margin-bottom: 0;">TLDR-TV</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
     a visual audio player for essays and books — chapters, synced transcripts, live captions
   </h3>
@@ -77,7 +77,7 @@ Word-timing files are produced from the audio + transcript by [`koko`](https://g
 ## 🏗️ Project Layout
 
 ```
-watch-it/
+tldr-tv/
 ├── src/
 │   ├── components/
 │   │   ├── LibraryView.jsx     # /app/home — catalog of guides

@@ -60,7 +60,7 @@ Media minutes + AI credits are the metering unit; plans rename often.
 ## Weaknesses / gaps vs us
 
 - Starts from **recording or script project**, not open-web article extract  
-- No “Watch this article” consumer path  
+- No “TLDR this article” consumer path  
 - Heavy editor UX — not a one-tap listen/watch player  
 - You build the media; we **generate** the media from text  
 - Pricing/complexity for casual article watchers is wrong fit  

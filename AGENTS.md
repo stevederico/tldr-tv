@@ -384,8 +384,8 @@ Skateboard uses an **Application Shell Architecture** where skateboard-ui provid
 
 ### Project Structure
 ```
-watch-it/
-├── extension/                # Chrome MV3 "Watch this article" (see extension/README.md)
+tldr-tv/
+├── extension/                # Chrome MV3 "TLDR this article" (see extension/README.md)
 ├── src/
 │   ├── components/
 │   │   ├── LibraryView.tsx   # / — guide catalog (fetches /api/guides)

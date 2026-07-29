@@ -59,7 +59,7 @@ Audio Reviews: podcast-like playback of **your** daily highlight review (not ful
 
 - **Read/listen**, not watch — no chapter images / video export  
 - Product velocity concerns in community (some feel feature freeze)  
-- Not one-tap “Watch this article” for strangers; it’s “save then maybe listen”  
+- Not one-tap “TLDR this article” for strangers; it’s “save then maybe listen”  
 - No word-timing media pipeline (generated audio essay with beats)  
 - Ghostreader ≠ illustrated storytelling  
 

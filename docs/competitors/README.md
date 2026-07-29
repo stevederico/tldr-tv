@@ -3,7 +3,7 @@
 Research on products near **text / articles → listen or watch**.
 
 **Last researched:** 2026-07-13  
-**Our product (working):** narrated, illustrated long-form from full text — word-synced transcript, chapter/beat images, browser “Watch this article” extension; MP4 export on roadmap.
+**Our product (working):** narrated, illustrated long-form from full text — word-synced transcript, chapter/beat images, browser “TLDR this article” extension; MP4 export on roadmap.
 
 ## Landscape map
 

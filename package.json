@@ -1,7 +1,7 @@
 {
-  "name": "watch-it",
+  "name": "tldr-tv",
   "private": false,
-  "version": "0.106.0",
+  "version": "0.107.0",
   "skateboardVersion": "4.11.0",
   "type": "module",
   "workspaces": [

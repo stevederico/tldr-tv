@@ -6,7 +6,7 @@
     "font": "geist",
     "iconLibrary": "lucide"
   },
-  "appName": "Watch It",
+  "appName": "TLDR-TV",
   "appIcon": "book-open",
   "tagline": "Essays and books with live word-synced transcripts and chapter visuals",
   "cta": "Browse Library",
@@ -58,11 +58,11 @@
     { "label": "Terms", "href": "/terms" }
   ],
   "copyrightText": "Personal audio library.",
-  "companyName": "Watch It",
-  "companyWebsite": "https://github.com/stevederico/book-player",
+  "companyName": "TLDR-TV",
+  "companyWebsite": "https://github.com/stevederico/tldr-tv",
   "companyEmail": "hello@bookplayer.dev",
-  "termsOfService": "Watch It is personal software. Use at your own risk. No warranties. Contact via GitHub for issues.",
-  "privacyPolicy": "Watch It stores progress and notes locally and on your chosen backend. No third-party analytics or data selling. See source for details.",
-  "EULA": "Personal, non-transferable license for the Watch It software. No reverse engineering. Provided as-is.",
+  "termsOfService": "TLDR-TV is personal software. Use at your own risk. No warranties. Contact via GitHub for issues.",
+  "privacyPolicy": "TLDR-TV stores progress and notes locally and on your chosen backend. No third-party analytics or data selling. See source for details.",
+  "EULA": "Personal, non-transferable license for the TLDR-TV software. No reverse engineering. Provided as-is.",
   "subscriptionDetails": "This app does not use subscriptions."
 }

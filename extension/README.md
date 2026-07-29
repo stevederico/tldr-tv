@@ -1,13 +1,13 @@
-# Watch this article (Chrome extension)
+# TLDR this article (Chrome extension)
 
-Chrome MV3 extension for Watch It. On any open article: extract text → `POST /api/guides` → open the player. Pipeline (TTS, images, chapters) stays on the backend.
+Chrome MV3 extension for TLDR-TV. On any open article: extract text → `POST /api/guides` → open the player. Pipeline (TTS, images, chapters) stays on the backend.
 
 ## Load unpacked (dev)
 
 1. Run the app: `bun run start` (API `:8000`, app `:5173`)
 2. Chrome → `chrome://extensions` → Developer mode → **Load unpacked**
 3. Select this `extension/` folder
-4. Open a free article (blog, Substack, etc.) → click the extension → **Watch this article**
+4. Open a free article (blog, Substack, etc.) → click the extension → **TLDR this article**
 5. A **floating PiP** appears on the blog page (no redirect). Captions + word highlight and playback speed live in the gear menu; the external-link icon opens the **Full** player; hover the top-right **×** to close.
 6. After reloading the extension, reload the article tab if the content script was stale
 

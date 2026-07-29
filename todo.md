@@ -2,14 +2,14 @@
 
 Priority order: top = do next. Same engine for everything; shells and polish stack on it.
 
-## P0 — Watch this article (browser extension)
+## P0 — TLDR this article (browser extension)
 
 Wedge: open-web “Listen mode with pictures.” Extension first; widget is P5.
 
 - [x] Chrome MV3: content script extracts readable article (title, author, body) from current page
 - [x] Selection fallback on hard/paywalled sites — only what the user can already see/select
 - [x] POST same payload as URL import → poll jobs → open `/app/:slug`
-- [x] Toolbar action: "Watch this article"
+- [x] Toolbar action: "TLDR this article"
 - [x] Never bypass paywalls / login walls
 - [x] On-page PiP player (default) instead of redirecting away from the blog
 
@@ -98,7 +98,7 @@ After extension proves the product. Idea: don’t wait for a click — **pre-gen
 
 - [ ] Publisher outreach surface: “We already made a Watch version of this article” (email / dashboard / claim link)
 - [ ] Claim flow: domain verify (DNS TXT or meta tag) → attach guides to publisher account
-- [ ] One-click **embed**: script tag or iframe “Watch this article” (CNBC/Bloomberg Listen-style, but illustrated)
+- [ ] One-click **embed**: script tag or iframe “TLDR this article” (CNBC/Bloomberg Listen-style, but illustrated)
 - [ ] One-click **MP4 download** / host on their CMS (optional watermark-free after claim)
 - [ ] Optional auto-inject: if meta tag / partner script present, show Watch player without manual embed per post
 - [ ] Same backend engine; branded shell + domain allowlist

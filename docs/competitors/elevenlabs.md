@@ -65,7 +65,7 @@ Exact tiers change frequently; treat voice quality as the constant.
 ## Weaknesses / gaps vs us
 
 - Reader/Studio are **audio**, not illustrated video essays  
-- No open-web “Watch this page” with chapter images  
+- No open-web “TLDR this page” with chapter images  
 - No word-synced visual player as core product (API can power it)  
 - DIY: user still needs pipeline for images, chapters, hosting  
 
