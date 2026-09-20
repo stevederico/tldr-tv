@@ -1,135 +1,207 @@
 <div align="center">
+  <img src="public/icons/favicon.svg" width="60" alt="TLDR-TV" />
   <h1 align="center" style="border-bottom: none; margin-bottom: 0;">TLDR-TV</h1>
   <h3 align="center" style="margin-top: 0; font-weight: normal;">
-    a visual audio player for essays and books — chapters, synced transcripts, live captions
+    a react audio player with kokoro tts, word-synced transcripts, and sqlite
   </h3>
+  <p>
+    <a href="docs/API.md">Docs</a>
+    ·
+    <a href="docs/ARCHITECTURE.md">Architecture</a>
+    ·
+    <a href="extension/README.md">Extension</a>
+  </p>
 </div>
-
-<br />
-
-## ✨ What It Does
-
-- **Audio + synced transcript** — every spoken word is highlighted as it's read; click any word to seek
-- **Chapters with hero images** — each section gets a title, quote, image, and caption
-- **Live captions** — YouTube-style overlay driven by per-word timestamps, sentence-aware chunking
-- **Library + player** — catalog all your guides at `/app/home`, play one at `/app/:slug`
-- **Real backend** — content lives in SQLite, audio + images served by Hono with range-request streaming
 
 <br />
 
 ## 🚀 Quick Start
 
+Node 24 or newer.
+
 ```bash
-npm run install-all     # installs root + backend workspace deps
-npm run start           # backend on :8000, Vite on :5173
+git clone https://github.com/stevederico/tldr-tv.git
+cd tldr-tv
+npm run install-all
+npm run start
 ```
 
-Open <http://localhost:5173/app/home> (root `/` redirects there). The library shows every guide in the DB; click one to open the player.
+Open <http://localhost:5173/app/home>. The library is on `:5173`. The API is on `:8000`.
+
+On first boot the server copies `backend/.env.example` to `backend/.env` if that file is missing. Replace `JWT_SECRET` before you turn sign-in on.
 
 <br />
 
-## 📚 How Content Loads
+## ✨ What's Included
 
-Guides live in the `Guides` table in SQLite (`backend/databases/App.db`). Audio + images sit on disk under `backend/public/{audio,images}/` and are served by Hono with proper range requests.
+Listen to an essay while the transcript tracks every word.
 
-The frontend talks to three endpoints:
+### 🎧 **Player**
+- **Word-level sync** highlights each spoken word and seeks when you click one
+- **Live captions** sit over the audio in sentence-sized chunks
+- **Chapter visuals** pair a title, quote, image, and caption with each section
+- **Progressive audio** starts from `GET /api/guides/:slug/stream.mp3` while speech is still rendering
 
-| Route | What you get |
-|---|---|
-| `GET /api/guides` | Library summaries: slug, title, author, duration, thumbnail, chapter count |
-| `GET /api/guides/:slug` | Full payload: chapters, transcript, word timings, audio URL |
-| `GET /audio/...` `GET /images/...` | Static asset streams from `backend/public/` |
+### 📚 **Library**
+- **Catalog** lists every guide: title, author, duration, thumbnail, chapter count
+- **Create** a video from a URL or pasted text at `/app/home`
+- **Play** one guide at `/app/:slug`
 
-In dev, Vite proxies all three to the backend on port 8000.
+### 🗣️ **Speech**
+- **Local Kokoro** (ONNX Kokoro-82M) speaks the transcript. Speech does not call a remote model
+- **Title first** — audio, captions, and the reader open on the guide title
+- **Article analysis** uses Grok for summary, chapters, and images. Set `XAI_API_KEY` for that step only
 
-<br />
+### 🧩 **Chrome extension**
+- **TLDR this article** extracts visible page text, creates a guide, and plays it in a floating player
+- **No paywall bypass** — only text already in the page, or a selection you highlighted
+- Load it from [extension/README.md](extension/README.md)
 
-## ➕ Add a New Guide
-
-1. **Drop the assets in place**
-   - `backend/public/audio/<your-file>.mp3`
-   - `backend/public/images/<slug>/...` (any hero/chapter images you reference)
-2. **Write a manifest** at `backend/scripts/seeds/<slug>.json` (or anywhere you like) with this shape:
-   ```json
-   {
-     "slug": "your-slug",
-     "title": "Your Title",
-     "author": "Author",
-     "date": "Month YYYY",
-     "duration": 1234,
-     "audio": "/audio/YourFile.mp3",
-     "thumbnail": "/images/your-slug/hero.jpg",
-     "timingOffset": 0,
-     "defaultViewMode": "real",
-     "transcript": "Full essay text…",
-     "chapters": [
-       { "time": 0, "title": "Chapter 1", "quote": "Opening line", "realImage": "/images/your-slug/01.webp", "caption": "…" }
-     ],
-     "timing": { "words": [{ "w": "first", "t": 0.12 }, { "w": "second", "t": 0.41 }] }
-   }
-   ```
-3. **Insert** by calling `db.upsertGuide(payload)` (see `backend/adapters/sqlite.js`) or by extending `backend/scripts/migrate-guides.js`.
-
-Word-timing files are produced from the audio + transcript by [`koko`](https://github.com/dottyio/koko) (Kokoro-82M ONNX). The migration script handles `{words: [...]}` and bare arrays.
+### 🛠️ **Developer experience**
+- **TypeScript strict** with `npm run typecheck` before build and test
+- **Node test runner** for the backend (`npm run test`)
+- **Vite** proxies `/api`, `/audio`, and `/images` to the backend in dev
 
 <br />
 
-## 🏗️ Project Layout
+## 📖 Configuration
 
+### Frontend
+
+Edit `src/constants.json`. `noLogin` is `true`, so the library stays open without an account.
+
+```json
+{
+  "appName": "TLDR-TV",
+  "tagline": "Essays and books with live word-synced transcripts and chapter visuals",
+  "cta": "Browse Library",
+  "noLogin": true
+}
 ```
-tldr-tv/
-├── src/
-│   ├── components/
-│   │   ├── LibraryView.jsx     # /app/home — catalog of guides
-│   │   └── PlayerView.jsx      # /app/:slug — audio + transcript player
-│   ├── assets/
-│   │   ├── styles.css
-│   │   └── pg.css              # player styles
-│   ├── main.jsx                # routes
-│   └── constants.json
-├── backend/
-│   ├── server.js               # Hono server, /api/* and static mounts
-│   ├── adapters/sqlite.js      # Guides + Users + Auths schema and CRUD
-│   ├── scripts/migrate-guides.js
-│   ├── databases/App.db
-│   └── public/
-│       ├── audio/              # MP3s, served with Range requests
-│       └── images/             # hero + chapter images
-└── public/                     # only PWA icons / robots / sitemap now
+
+### Backend
+
+`backend/config.json` picks the database. SQLite is the default.
+
+```json
+{
+  "staticDir": "../dist",
+  "database": {
+    "db": "App",
+    "dbType": "sqlite",
+    "connectionString": "./databases/App.db"
+  }
+}
 ```
+
+`backend/.env` (gitignored) holds secrets. Start from `backend/.env.example`:
+
+```bash
+JWT_SECRET=change-me-to-a-long-random-string
+STRIPE_KEY=
+STRIPE_ENDPOINT_SECRET=
+XAI_API_KEY=
+FREE_USAGE_LIMIT=20
+```
+
+Stripe keys are optional. This app does not sell a subscription (`stripeProducts` is empty). `XAI_API_KEY` is only for article analysis and images.
 
 <br />
 
 ## 🏗️ Tech Stack
 
-| Technology | Purpose |
-|---|---|
-| **React 19 + Vite 7** | Frontend |
-| **react-router-dom v7** | Routing |
-| **Tailwind v4** | Styling |
-| **Hono** | Backend HTTP |
-| **SQLite** (Node built-in) | Content + auth storage |
-| **skateboard-ui** | Shell, auth, shadcn primitives |
-| **JWT + bcrypt** | Auth (catalog reads are public; writes require sign-in) |
+| Technology | Version | Purpose |
+|---|---|---|
+| **React** | 19.2 | UI |
+| **Vite** | 8.0 | Dev server and production build |
+| **TypeScript** | 7.0 | Strict types, no emit step |
+| **Tailwind CSS** | 4.3 | Styling |
+| **react-router** | 7.15 | Routing |
+| **skateboard-ui** | 4.14 | Shell, auth, shadcn primitives |
+| **Hono** | 4.7 | HTTP API and static audio |
+| **Node.js** | 24+ | Runtime |
+| **SQLite** | built-in | Guides, users, auth |
+| **Kokoro** | 82M ONNX | Local text-to-speech |
 
 <br />
 
-## 🛠️ Development
+## 🗺️ Architecture
 
-```bash
-npm run front          # Vite dev server only (port 5173)
-npm run server         # Hono backend only (port 8000)
-npm run test           # vitest run
-npm run build          # production build → dist/
+Three parts. **skateboard-ui** owns routing, auth, and theme. **This repo** owns the library, the player, and speech. **`constants.json`** owns names, nav, and whether login is on.
+
+Guides live in the SQLite `Guides` table, not in static JSON. MP3s and images sit under `backend/public/{audio,images}/`. Hono serves them with `Range` requests so playback can seek. In production the same process serves the built SPA from `dist/`.
+
+```tsx
+createSkateboardApp({
+  constants,
+  appRoutes: [
+    { path: 'home', element: <LibraryView /> },
+    { path: ':slug', element: <PlayerView /> },
+  ],
+  overrides: { layout: MinimalLayout },
+});
 ```
 
-The backend serves the built SPA from `dist/` in production along with `/api/*`, `/audio/*`, `/images/*`.
+Content shape, endpoints, and the speech pipeline: [docs/SCHEMA.md](docs/SCHEMA.md), [docs/API.md](docs/API.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+<br />
+
+## 🚢 Deployment
+
+See [docs/DEPLOY.md](docs/DEPLOY.md). The Dockerfile in this repo builds a single image that serves the SPA and the API.
+
+<br />
+
+## 🤝 Contributing
+
+```bash
+git clone https://github.com/stevederico/tldr-tv.git
+cd tldr-tv
+npm run install-all
+npm run start
+npm run test
+```
+
+<br />
+
+## 📬 Community & Support
+
+- **X**: [@stevederico](https://x.com/stevederico)
+- **Issues**: [GitHub Issues](https://github.com/stevederico/tldr-tv/issues)
+
+<br />
+
+## 🙏 Acknowledgements
+
+- [React](https://react.dev) — UI
+- [Vite](https://vite.dev) — dev server and build
+- [Tailwind CSS](https://tailwindcss.com) — styling
+- [Hono](https://hono.dev) — HTTP server
+- [Kokoro](https://github.com/hexgrad/kokoro) — local speech model
+- [skateboard-ui](https://github.com/stevederico/skateboard-ui) — app shell and shadcn primitives
+- [shadcn/ui](https://ui.shadcn.com) — component design
+- [Lucide](https://lucide.dev) — icons
+
+<br />
+
+## 🎪 Related Projects
+
+- [skateboard](https://github.com/stevederico/skateboard) — React boilerplate with auth and payments
+- [skateboard-ui](https://github.com/stevederico/skateboard-ui) — shell, theme, and components
+
+<br />
+
+## 🚀 Ready to listen?
+
+```bash
+npm run install-all && npm run start
+```
 
 <br />
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+MIT License — see [LICENSE](LICENSE).
 
 <br />
 
@@ -138,5 +210,9 @@ MIT — see [LICENSE](LICENSE).
 <div align="center">
   <p>
     Made with <a href="https://github.com/stevederico/skateboard">Skateboard</a> — a React boilerplate with auth and payments
+  </p>
+  <p>Built by <a href="https://x.com/stevederico">Steve Derico</a></p>
+  <p>
+    <a href="https://github.com/stevederico/tldr-tv">Star TLDR-TV on GitHub</a>
   </p>
 </div>

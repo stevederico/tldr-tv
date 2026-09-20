@@ -5,6 +5,10 @@
   New versions go at the top. Present tense, 3 words or less per item.
   Dash-prefixed items = still open (todo list).
 -->
+0.108.0
+
+  Rewrite project README
+
 0.107.0
 
   Rename to TLDR-TV
