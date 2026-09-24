@@ -39,7 +39,7 @@ import {
   EmptyTitle,
   EmptyDescription,
 } from '@stevederico/skateboard-ui/shadcn/ui/empty';
-import CircleAlert from '@stevederico/skateboard-ui/icons/CircleAlert';
+import { CircleAlert } from 'lucide-react';
 
 /** Transient play/pause feedback flash overlay state. */
 interface Feedback {

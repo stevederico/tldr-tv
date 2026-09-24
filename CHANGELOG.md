@@ -5,6 +5,13 @@
   New versions go at the top. Present tense, 3 words or less per item.
   Dash-prefixed items = still open (todo list).
 -->
+0.109.0
+
+  Port skateboard 5.6
+  Add Rust guide APIs
+  Stream TTS chunked
+  Install Kokoro deps
+
 0.108.0
 
   Rewrite project README

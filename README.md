@@ -22,11 +22,17 @@ Node 24 or newer.
 ```bash
 git clone https://github.com/stevederico/tldr-tv.git
 cd tldr-tv
-npm run install-all
+npm install
 npm run start
 ```
 
-Open <http://localhost:5173/app/home>. The library is on `:5173`. The API is on `:8000`.
+In another terminal:
+
+```bash
+cd backend && cargo run
+```
+
+Open <http://localhost:5173/app/home>. Vite is on `:5173` and proxies `/api`, `/audio`, and `/images` to the Rust API on `:8000`.
 
 On first boot the server copies `backend/.env.example` to `backend/.env` if that file is missing. Replace `JWT_SECRET` before you turn sign-in on.
 
@@ -59,7 +65,8 @@ Listen to an essay while the transcript tracks every word.
 
 ### 🛠️ **Developer experience**
 - **TypeScript strict** with `npm run typecheck` before build and test
-- **Node test runner** for the backend (`npm run test`)
+- **Node test runner** for scripts and player helpers (`npm test`)
+- **cargo test --locked** for the Rust API
 - **Vite** proxies `/api`, `/audio`, and `/images` to the backend in dev
 
 <br />
@@ -116,11 +123,11 @@ Stripe keys are optional. This app does not sell a subscription (`stripeProducts
 | **Vite** | 8.0 | Dev server and production build |
 | **TypeScript** | 7.0 | Strict types, no emit step |
 | **Tailwind CSS** | 4.3 | Styling |
-| **react-router** | 7.15 | Routing |
-| **skateboard-ui** | 4.14 | Shell, auth, shadcn primitives |
-| **Hono** | 4.7 | HTTP API and static audio |
-| **Node.js** | 24+ | Runtime |
-| **SQLite** | built-in | Guides, users, auth |
+| **react-router** | 7.18 | Routing |
+| **skateboard-ui** | 5.1 | Shell, auth, shadcn primitives |
+| **Rust** | zero-crate | HTTP API, auth, and static audio |
+| **Node.js** | 24+ | Vite, and the Kokoro speech helper |
+| **SQLite** | libsqlite3 | Guides, users, auth |
 | **Kokoro** | 82M ONNX | Local text-to-speech |
 
 <br />
@@ -129,7 +136,7 @@ Stripe keys are optional. This app does not sell a subscription (`stripeProducts
 
 Three parts. **skateboard-ui** owns routing, auth, and theme. **This repo** owns the library, the player, and speech. **`constants.json`** owns names, nav, and whether login is on.
 
-Guides live in the SQLite `Guides` table, not in static JSON. MP3s and images sit under `backend/public/{audio,images}/`. Hono serves them with `Range` requests so playback can seek. In production the same process serves the built SPA from `dist/`.
+Guides live in the SQLite `Guides` table, not in static JSON. MP3s and images sit under `backend/public/{audio,images}/`. The Rust server sends them with `Range` support so playback can seek. In production the same process serves the built SPA from `dist/`.
 
 ```tsx
 createSkateboardApp({
@@ -157,9 +164,11 @@ See [docs/DEPLOY.md](docs/DEPLOY.md). The Dockerfile in this repo builds a singl
 ```bash
 git clone https://github.com/stevederico/tldr-tv.git
 cd tldr-tv
-npm run install-all
+npm install
 npm run start
-npm run test
+cd backend && cargo run
+npm test
+cd backend && cargo test --locked
 ```
 
 <br />
@@ -176,7 +185,7 @@ npm run test
 - [React](https://react.dev) — UI
 - [Vite](https://vite.dev) — dev server and build
 - [Tailwind CSS](https://tailwindcss.com) — styling
-- [Hono](https://hono.dev) — HTTP server
+- Rust — HTTP API, with SQLite and libcurl as system libraries
 - [Kokoro](https://github.com/hexgrad/kokoro) — local speech model
 - [skateboard-ui](https://github.com/stevederico/skateboard-ui) — app shell and shadcn primitives
 - [shadcn/ui](https://ui.shadcn.com) — component design

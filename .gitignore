@@ -19,7 +19,6 @@ dist-ssr
 .env.test.local
 .env.production.local
 backend/.env
-!backend/.env.example
 
 .claude/
 .agent-browser/
@@ -42,15 +41,16 @@ deno.lock
 *.db-shm
 *.db-wal
 
-MIGRATION_GUIDE-0.9.8.md
-SKATEBOARD_UI_EXTENSIONS_PROPOSAL.md
-.gstack/
+# Build & tooling artifacts
+coverage
+bun.lock
+backend/target
 
 # Kokoro TTS models + voice embeddings — downloaded on first run
 backend/tts/models/
 
 # Generated TTS audio + Grok images — regenerable, not versioned.
-# Exception: the Paul Graham essay guides ship as demo/seed content (kept).
+# The Paul Graham essay guides ship as demo content and stay tracked.
 backend/public/audio/*
 !backend/public/audio/good-writing-3.mp3
 !backend/public/audio/founder-mode.mp3
