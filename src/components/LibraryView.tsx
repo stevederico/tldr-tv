@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, MouseEvent } from 'react';
 import { useNavigate } from 'react-router';
-import GuideProgress from './GuideProgress';
+import { Plus, Trash2, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,10 +11,9 @@ import {
   DialogTitle,
 } from '@stevederico/skateboard-ui/shadcn/ui/dialog';
 import { Spinner } from '@stevederico/skateboard-ui/shadcn/ui/spinner';
-import Plus from '@stevederico/skateboard-ui/icons/Plus';
-import X from '@stevederico/skateboard-ui/icons/X';
-import Trash2 from '@stevederico/skateboard-ui/icons/Trash2';
+import GuideProgress from './GuideProgress';
 import { toast } from '../toast';
+import { mutationHeaders } from '../utils/api';
 import type { Guide } from '../utils/playerUtils';
 
 /** Which source the create form is reading from. */
@@ -130,7 +129,10 @@ export default function LibraryView() {
     setDeletingSlug(slug);
     setGuides(gs => gs.filter(x => x.slug !== slug));
     try {
-      const res = await fetch(`/api/guides/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/guides/${encodeURIComponent(slug)}`, {
+        method: 'DELETE',
+        headers: mutationHeaders(),
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error || `HTTP ${res.status}`);
@@ -247,7 +249,7 @@ export default function LibraryView() {
   async function fetchFromUrl(url: string): Promise<SourceData> {
     const res = await fetch('/api/fetch-url', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: mutationHeaders(true),
       body: JSON.stringify({ url: url.trim() }),
     });
 
@@ -310,7 +312,7 @@ export default function LibraryView() {
 
       const createRes = await fetch('/api/guides', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: mutationHeaders(true),
         body: JSON.stringify(metadata),
       });
       const createBody = await createRes.json().catch(() => ({}));

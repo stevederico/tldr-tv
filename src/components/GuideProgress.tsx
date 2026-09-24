@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Guide, GuideJob } from '../utils/playerUtils';
+import { mutationHeaders } from '../utils/api';
 
 /** A single completeness step within a phase. */
 interface ProgressStep {
@@ -184,7 +185,7 @@ export default function GuideProgress({ slug, guide, onRefresh }: GuideProgressP
     const g = await r.json();
     await fetch(`/api/guides`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: mutationHeaders(true),
       body: JSON.stringify({ ...g, visibility: 'public' }),
     });
     onRefresh?.();

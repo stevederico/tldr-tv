@@ -1,27 +1,29 @@
 # AGENTS.md
 
-Project guidance for AI agents working with this repository.
+Project guidance for Claude Code and AI agents working with this repository.
+This file is the source of truth; `CLAUDE.md` is a symlink to it.
 
 ## Development Commands
 
 **Primary Development:**
 ```bash
-npm run start          # Start both frontend and backend concurrently
-npm run front          # Frontend only (Vite dev server on :5173)
-npm run server         # Backend only (Hono server on :8000)
+npm run start          # Frontend only (Vite on :5173)
+npm run front          # Same as start
+cd backend && cargo run   # Backend on :8000
 ```
 
 **Build Commands:**
 ```bash
-npm run build          # Development build
-npm run prod           # Production build
-npm install-all        # Install all dependencies (root + workspace)
+npm run build          # Frontend typecheck + Vite production build
+npm run prod           # Same as build
+npm install-all        # Install frontend dependencies
+cd backend && cargo build --release
 ```
 
 **Testing:**
 ```bash
-npm run test           # Run all tests (node --test, backend workspace)
-npm run test:watch     # Watch mode for development
+npm run test           # Frontend typecheck + script tests (no vitest)
+cd backend && cargo test --locked
 ```
 
 ## Code Standards
@@ -48,15 +50,22 @@ When making ANY code changes, you MUST update:
 - JSDoc comments on modified functions/classes/components
 - Inline comments explaining complex logic
 - README.md if user-facing behavior changes
-- AGENTS.md if architecture/patterns change
+- CLAUDE.md if architecture/patterns change
 - API docs if endpoints change
-- CHANGELOG.md for all changes (see commit protocol)
+- the changelog for all changes (`skateboard-changelog.md` in this repo; `CHANGELOG.md` in apps — see commit protocol)
+
+**Version & dependency bumps MUST propagate to every doc that names them (no exceptions):**
+- Bumping a version in `package.json` (the app `version`, `skateboardVersion`, or any dependency) is NOT done until you have grepped the docs for the old value and updated every hit: `README.md` (the Technology/Version table, version floors), `docs/GUIDE.md`, `docs/UPGRADE.md`, and the AGENTS.md "Version" block.
+- In the skateboard boilerplate repo, `version` and `skateboardVersion` stay equal. In this app, `version` is the app semver and `skateboardVersion` is the boilerplate pin.
+- **Never hardcode dependency pins inside prose/docs.** Embedded "upgrade to X" prompts with literal pins rot every release. Reference the current pins from `package.json` / the reference repo instead, or point at the version-agnostic updater (`scripts/update-skateboard.js`).
+- Quick audit before committing a bump: `grep -rn "<old-version>" README.md docs/ AGENTS.md` must return nothing.
 
 **Before committing:**
 1. Review all modified functions — do JSDoc comments match current signatures and behavior?
 2. Check that parameter names, types, and descriptions are accurate
 3. Remove doc comments for deleted functions — don't leave orphaned docs
 4. Verify examples in docs still work with changes
+5. If any version changed, run the grep audit above and confirm zero stale hits
 
 **Out-of-date documentation is worse than no documentation.**
 
@@ -89,7 +98,7 @@ When making ANY code changes, you MUST update:
 ### TypeScript Style
 
 - TypeScript everywhere — `.ts` / `.tsx` files, `strict` mode always on
-- No build-step typechecking: `npm run typecheck` runs `tsc --noEmit` for both root and backend; it gates `build`, `prod`, and `test`
+- No build-step typechecking: `npm run typecheck` runs `tsc -p tsconfig.json` (`noEmit` is set in tsconfig) for the frontend; it gates `build`, `prod`, and `test`. Backend is `cargo test`.
 - `@types` packages are dev-only dependencies (`@types/node`, `@types/react`, `@types/react-dom`)
 - Prefer `const` over `let` — use `let` only when reassigning
 - Prefer `async`/`await` over `.then()` chains
@@ -118,7 +127,7 @@ All of these silence the compiler instead of proving correctness:
 
 - Never use dotenv — manually load `.env` file
 - Never use `require()` — ES modules only
-- Never use mongoose — use the `mongodb` npm package
+- Never add a database driver package — the backend is SQLite through system `libsqlite3` FFI
 - Never use axios, got, or similar — native `fetch` only
 - Never use PostCSS, autoprefixer, or `tailwind.config.js`
 - Never use ESLint or the `globals` package
@@ -199,8 +208,12 @@ All of these silence the compiler instead of proving correctness:
 
 ### Icons
 
-- Default icon library: Lucide React (`lucide-react`)
-- Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders them as text)
+- Default library: Lucide React (`lucide-react`) — runtime dep of skateboard-ui **5.0** (hoisted); apps should declare it too
+- **Always named-import from `lucide-react`:** `import { Plus, Trash2 } from 'lucide-react'`
+- **Never** import from `@stevederico/skateboard-ui/icons` or `@stevederico/skateboard-ui/icons/*` — removed in 5.0 (was 4.18)
+- **Never** use public DynamicIcon — removed in 5.0 (was 4.17); shell-only `constantsIcon` resolves `constants.json` icon strings
+- When migrating from 4.x: rewrite every `skateboard-ui/icons` and `DynamicIcon` import to a named `lucide-react` import (see **Migrating 4.x → 5.0**)
+- Never use emoji as UI icons — use proper icon components (exception: `constants.json` feature icons where the shell renders unknown/legacy values as text)
 - Icon-only buttons must have `aria-label`
 - Standard sizes: 16px inline, 18px buttons, 24px cards, 48px empty states
 
@@ -286,9 +299,10 @@ When a project uses `constants.json`, include a `design` block:
 
 ### Test Runner
 
-- **Node's built-in test runner** (`node --test`) is the standard — never use Jest, Mocha, or Jasmine; no test framework dependency
-- Backend tests run via the workspace: root `npm run test` typechecks, then delegates to `backend` (`node --test server.test.ts`)
-- Use `npm run test` for CI; `npm run test:watch` for development
+- **Frontend / scripts:** Node's built-in test runner (`node --test`) — never Jest, Mocha, or Jasmine
+- **Backend:** `cargo test` (`#[cfg(test)]` next to the code). Zero crate test frameworks.
+- Root `npm run test` is frontend typecheck + script tests. No vitest. Backend: `cd backend && cargo test --locked`
+- CI runs both.
 
 ### What to Test
 
@@ -359,7 +373,9 @@ describe('fetchUser', () => {
 
 ### Commit Process
 
-1. **Update CHANGELOG.md** — never remove anything. To-do list (dash-prefixed) stays at top. Insert new version notes below to-do section, above previous versions. List changes with 2-space indent, no dashes, 3 words or less, present tense.
+> **Which changelog?** In *this* skateboard boilerplate repo, releases are recorded in **`skateboard-changelog.md`** (NOT `CHANGELOG.md` — that filename is reserved so scaffolded apps don't inherit skateboard's history). Downstream apps created from skateboard use their own `CHANGELOG.md`. So: working on skateboard itself → `skateboard-changelog.md`; working on an app → `CHANGELOG.md`.
+
+1. **Update the changelog** (`skateboard-changelog.md` in this repo; `CHANGELOG.md` in apps) — never remove anything. To-do list (dash-prefixed) stays at top. Insert new version notes below to-do section, above previous versions. List changes with 2-space indent, no dashes, 3 words or less, present tense.
 2. **Update package.json** — bump version to match CHANGELOG (semver)
 3. **Stage files** — only stage files you directly modified (no `git add .`)
 4. **Commit** — message starts with version number, followed by descriptive summary
@@ -379,97 +395,56 @@ Skateboard uses an **Application Shell Architecture** where skateboard-ui provid
 **Key principle:** Update skateboard-ui package once, all apps inherit improvements.
 
 ### Monorepo Structure
-- **Root**: React frontend with Vite 7.1+ build system using skateboard-ui
-- **Backend Workspace**: Hono server with multi-database support
+- **Root**: React 19 frontend on Vite 8 using skateboard-ui
+- **Backend**: zero-crate Rust (`backend/`), SQLite via system libsqlite3
 
 ### Project Structure
 ```
 tldr-tv/
-├── extension/                # Chrome MV3 "TLDR this article" (see extension/README.md)
+├── extension/             # Chrome MV3 "TLDR this article"
 ├── src/
-│   ├── components/
-│   │   ├── LibraryView.tsx   # / — guide catalog (fetches /api/guides)
-│   │   └── PlayerView.tsx    # /app/player/:slug — audio + transcript player
-│   ├── assets/{styles.css, pg.css}
-│   ├── main.tsx              # Routes
+│   ├── components/        # LibraryView, PlayerView, transcript player
+│   ├── assets/styles.css
+│   ├── main.tsx           # Routes
 │   └── constants.json
 ├── backend/
-│   ├── server.ts             # Hono — /api/* + static mounts for /audio /images
-│   ├── adapters/             # SQLite (primary), Postgres + Mongo adapters
-│   ├── scripts/migrate-guides.js
-│   ├── databases/App.db
-│   └── public/
-│       ├── audio/            # MP3s, served with Range requests
-│       └── images/           # hero + chapter images
-├── public/                   # PWA icons / robots / sitemap only (no content)
-├── todo.md                   # Open work items (auth gating, Phase 4, etc.)
+│   ├── src/               # Zero-crate Rust server (routes + Guides schema)
+│   ├── tts/               # Kokoro ONNX pipeline, invoked by the Rust server
+│   ├── public/{audio,images}
+│   ├── databases/
+│   └── config.json
 ├── package.json
-└── vite.config.ts            # Dev proxies /api /audio /images → :8000
+└── vite.config.ts         # Proxies /api /audio /images to :8000
 ```
 
+Guides live in the SQLite `Guides` table. Audio and images are files under `backend/public`. `GET /api/guides` is the library. `GET /api/guides/:slug` is the player payload. Creating a guide is `POST /api/guides`. Dev Vite proxies `/api`, `/audio`, and `/images` to the Rust server on port 8000.
+
+### TTS Audio Pipeline
+
+TTS is local Kokoro (`backend/tts/kokoro.js`), not Grok. Grok only analyzes text and draws images. The Rust server shells out to `backend/tts/render-guide.mjs`, which calls `synthesizeGuide`. Do not splice silence from per-word timings: Kokoro already pauses on punctuation, and timing-based cuts chop expanded tokens such as years. The canonical MP3 must be written to a seekable file so ffmpeg can emit an Xing/Info header. The spoken audio starts with the guide title. A code change does not rewrite MP3s already on disk. Re-render with `POST /api/guides/:slug/tts`.
+
 **What's NOT in your app (provided by skateboard-ui):**
-- `context.jsx` — imported from skateboard-ui/Context
-- Complex routing setup — uses `createSkateboardApp()`
-- Full theme CSS — imports base theme from skateboard-ui
+- App context/state - Imported from `@stevederico/skateboard-ui/Context`
+- Complex routing setup - Uses createSkateboardApp()
+- Full theme CSS - Imports base theme from skateboard-ui
 
-### Content Model
-
-Guides (audio essays / books) are stored in the SQLite `Guides` table — not in static files. Audio + images sit on disk under `backend/public/{audio,images}/` and Hono serves them with `Range` support so playback streams correctly.
-
-**The content routes the frontend uses:**
-
-| Route | Purpose |
-|---|---|
-| `GET /api/guides` | Library summaries (slug, title, author, duration, thumbnail, chapterCount) |
-| `GET /api/guides/:slug` | Full payload: chapters, transcript, word timings, audio URL |
-| `GET /api/guides/:slug/stream.mp3` | Progressive TTS audio — streams chunk MP3s during render for fast playback start, else `302` to `/audio/<slug>.mp3` |
-| `POST /api/guides` + `POST /api/guides/:slug/audio` | Create flow (currently open; auth gating on `todo.md`) |
-
-In dev, Vite proxies `/api`, `/audio`, `/images` to the backend on `:8000`. In prod, Hono serves all three directly.
-
-**Adding a guide programmatically:** `backend/scripts/migrate-guides.js` reads JSON manifests + transcript files and upserts via `db.upsertGuide`. See `docs/SCHEMA.md` for the `Guides` table shape and `docs/API.md` for endpoint details.
-
-### TTS Audio Pipeline — invariants (DO NOT REGRESS)
-
-TTS is **local Kokoro** (`backend/tts/kokoro.js` → `synthesize()`), ONNX Kokoro-82M — **not** Grok. Grok only does the text analysis/summary. The pipeline (`backend/tts/tts-pipeline.js` `synthesizeGuide`) chunks the transcript (~380 chars ≈ 25s of audio per chunk), synthesizes each chunk, and concatenates the WAVs, then `wavToMp3` encodes the canonical `/audio/<slug>.mp3`.
-
-Two bugs here caused a long, painful "audio skips" hunt. Both are fixed; **do not reintroduce them:**
-
-1. **Mid-word cut ("skips when it says 2026")** — root cause: the pipeline used to splice **extra silence at each punctuation mark** using Kokoro's **per-word timings**. Those timings **drift for tokens Kokoro expands when speaking** — the year `2026` is one transcript word but is spoken "twenty twenty-six", the time `1:31pm` expands, etc. The spliced silence landed **inside** the expanded word and chopped it → audible as a skip *inside* the word. **Fix:** never splice silence from per-word timings. **Kokoro already emits natural, correctly-placed pauses** for `. ! ? , ; :` via its punctuation tokens — trust them. `synthesizeGuide` now pushes each segment's audio + timings **verbatim** (only inter-segment seam / cross-chunk breath silence remains, at real boundaries). If asked to "add pauses" / "make commas breathe", tune Kokoro input or `PAUSE_MS`/`SENTENCE_PAUSE_SEC` at **segment/chunk seams only** — **never** re-add timing-based intra-word/intra-segment slicing (`findPunctuationPauses` + `sliceWavSamples` were deleted for this reason).
-
-2. **Missing MP3 seek header ("skips to the wrong spot on rewind")** — root cause: `wavToMp3` piped MP3 to `stdout` (`pipe:1`). ffmpeg can only write a complete **Xing/Info seek header** to a **seekable** output (it rewinds to frame 1 after encoding to fill in the frame count + seek TOC). A pipe can't seek → header omitted → the browser estimates byte↔time from average bitrate → seeks land wrong, **deterministically per file**. **Fix:** the canonical encode (`xing: true`) writes to a **temp file** then reads it back; only the streaming per-chunk path (`xing: false`, no header wanted) keeps the fast pipe. Verify any new/edited encode with: `python3 -c "d=open('f.mp3','rb').read(3000);print(d.find(b'Xing'),d.find(b'Info'))"` — one of them must be `>= 0`.
-
-**Title is read first:** `runTtsJob` prepends `guide.title` (as its own sentence + paragraph break) to the transcript before synthesis, so the audio opens with the article title. Guarded against double-prepend on re-render (skips if the stored transcript already starts with the title). The stored/normalized transcript then includes the title, keeping audio, captions, and the reader aligned.
-
-**Re-render a guide** (picks up pipeline fixes; requires a backend restart first if code changed): `POST /api/guides/:slug/tts`, then poll `GET /api/guides/:slug` for `jobs.tts.status === 'done'`. **Existing audio on disk is NOT auto-fixed** by a code change — it must be re-rendered. To add a seek header to old files **without** re-rendering (lossless), remux: `ffmpeg -y -i in.mp3 -c copy -write_xing 1 out.mp3` (duration unchanged). The mid-word-cut fix, however, requires a full **re-render** (the silence is baked into the WAV concat).
-
-**Debugging "it skips" — verify the FILE before touching playback:** decode to PCM and (a) look for silence runs *inside* a spoken word (`ffmpeg -i f.mp3 -f s16le -ar 24000 -ac 1 -`), (b) transcribe with local whisper (`whisper-cli -m ~/.local/opt/whisper.cpp/models/ggml-large-v3-turbo.bin -f f.wav -ml 1`) to confirm words aren't dropped, (c) check the Xing/Info header. "Skips at the same spot every replay" = baked into the file (pipeline), not playback.
+**Result:** ~550 lines of boilerplate → ~26 lines
 
 ### Frontend Stack
-- React, Vite, react-router-dom (latest versions)
+- React, Vite, skateboard-ui (routing via `useSafeNavigate`)
 - TypeScript (`strict`, no-build-step typecheck), ES modules only
 - Tailwind CSS v4+ with @tailwindcss/vite plugin
 
 ### Backend Stack
-- Runtime: Node.js with Hono
-- Database: SQLite preferred, MongoDB if SQLite not available
-- Always use the `mongodb` npm package (never mongoose)
-- HTTP client: native `fetch` only
-
-### Multi-Database Architecture
-
-The application uses a database factory pattern supporting three database types:
-
-**Database Adapters** (`backend/adapters/`):
-- `sqlite.ts` - Default SQLite provider using Node.js built-in DatabaseSync
-- `postgres.ts` - PostgreSQL provider with connection pooling
-- `mongodb.ts` - MongoDB provider with native driver
-- `manager.ts` - Unified interface and provider selection
+- Runtime: zero-crate Rust (`std::net::TcpListener` + OS threads). Empty `[dependencies]`.
+- SQLite via system `libsqlite3` FFI. Postgres and Mongo are not supported.
+- Stripe HTTPS via system `libcurl` FFI. Never hand-roll TLS. Never add a crate.
+- A crate needs an explicit yes. Do not `cargo add`.
 
 **Configuration** (`backend/config.json`):
 ```json
 {
-  "client": "http://localhost:5173",
+  "staticDir": "../dist",
   "database": {
     "db": "MyApp",
     "dbType": "sqlite",
@@ -479,17 +454,20 @@ The application uses a database factory pattern supporting three database types:
 ```
 
 ### Authentication & Security
-- JWT tokens in HttpOnly cookies
+- JWT tokens in HttpOnly cookies (HS256, byte-compatible with the old Node tokens)
 - CSRF token protection for state-changing operations
-- Scrypt password hashing via `node:crypto` (legacy bcrypt hashes verified and lazily rehashed on signin)
+- Scrypt password hashing (legacy bcrypt hashes verified and lazily rehashed on signin)
 - JWT with 30-day expiration
-- Rate limiting on auth, payments, and global endpoints
 - Security headers (CSP, HSTS, X-Frame-Options, etc.)
 
 ### Build System Integration
 
 **Vite Configuration** (v1.1+ app-owned):
 Apps own their `vite.config.ts` directly. See [reference implementation](https://github.com/stevederico/skateboard/blob/master/vite.config.ts).
+
+- JSX via Vite's built-in esbuild (`jsx: 'automatic'`) — no `@vitejs/plugin-react-swc`
+- Do **not** pass `vite --force` or set `optimizeDeps.force: true` in normal dev (causes full dep re-bundle every start)
+- Dev edits full-reload the page (no React Fast Refresh plugin)
 
 **Styling:**
 ```css
@@ -509,8 +487,10 @@ Apps own their `vite.config.ts` directly. See [reference implementation](https:/
 
 **Import path:** `@stevederico/skateboard-ui/shadcn/ui/<component>`
 
+(From skateboard-ui **5.0**, that path is a package `exports` remap onto `ui/` — there are no linker shim files. Same import string for apps.)
+
 **Available components:**
-`accordion`, `alert`, `alert-dialog`, `aspect-ratio`, `avatar`, `badge`, `breadcrumb`, `button`, `button-group`, `calendar`, `card`, `carousel`, `chart`, `checkbox`, `collapsible`, `command`, `context-menu`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `hover-card`, `input`, `input-group`, `item`, `kbd`, `label`, `menubar`, `navigation-menu`, `pagination`, `popover`, `progress`, `radio-group`, `resizable`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `sonner`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
+`accordion`, `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `calendar`, `card`, `checkbox`, `collapsible`, `command`, `dialog`, `drawer`, `dropdown-menu`, `empty`, `field`, `input`, `kbd`, `label`, `pagination`, `popover`, `progress`, `radio-group`, `scroll-area`, `select`, `separator`, `sheet`, `sidebar`, `skeleton`, `slider`, `spinner`, `switch`, `table`, `tabs`, `textarea`, `toggle`, `toggle-group`, `tooltip`
 
 **Rules:**
 - Prefer shadcn components over custom HTML elements (e.g., use `<Button>` not `<button>`, `<Card>` not `<div className="card">`)
@@ -641,7 +621,11 @@ Backend requires `.env` file with:
 - `CORS_ORIGINS` - Comma-separated allowed origins (production)
 - `FRONTEND_URL` - Frontend URL for Stripe redirects (production)
 - `FREE_USAGE_LIMIT` - Usage limit for free users (default: 20)
-- `MONGODB_URL`, `POSTGRES_URL`, `DATABASE_URL` - Database connections (production)
+- `NODE_ENV` - `production` enables HSTS, skips `.env` loading, and requires a 32+ character `JWT_SECRET`
+- `PORT` - Listen port (default: 8000)
+
+Database connection is SQLite only and lives in `backend/config.json` — there are no
+`DATABASE_URL`, `MONGODB_URL`, or `POSTGRES_URL` variables.
 
 ## Reference Documentation
 
@@ -651,21 +635,122 @@ When working with these libraries, consult the provided documentation before mak
 |---|---|
 | shadcn/ui | https://ui.shadcn.com/llms.txt |
 | Vite | https://vite.dev/llms.txt |
-| Hono | https://hono.dev/llms.txt |
+| Rust std | https://doc.rust-lang.org/std/ |
 | Tailwind CSS v4 | https://raw.githubusercontent.com/tailwindlabs/tailwindcss.com/refs/heads/md-endpoints/llms.txt |
+
+## Agent skill (required reading)
+
+This repo ships **`skills/skateboard/SKILL.md`** — the Cursor/Claude skill for building and upgrading skateboard apps.
+
+**When to use it:** scaffolding, editing views/`constants.json`, choosing shadcn primitives, Rust backend auth/Stripe/SQLite, running `scripts/update-skateboard.js`, fixing template drift, or any task that mentions skateboard / skateboard-ui.
+
+**What agents must do:**
+1. Read `skills/skateboard/SKILL.md` first (and `skills/skateboard/rules/*` for icons/forms/styling/views as needed).
+2. Prefer shadcn primitives from `@stevederico/skateboard-ui/shadcn/ui/*` over raw HTML.
+3. Named-import icons from `lucide-react` only (see Icons below).
+4. Treat `skateboardVersion` as a label — verify the tree (especially `backend/`) matches the template before claiming an upgrade is done.
+5. For upgrades, follow **Migrating 4.x → 5.0** below (and `docs/UPGRADE.md`).
+
+Canonical pins live in this repo’s `package.json` (`version` / `skateboardVersion` / `@stevederico/skateboard-ui`). Refresh the skill metadata when those move.
 
 ## Documentation
 
 **Reference:**
-- [Architecture](docs/ARCHITECTURE.md) - Application Shell pattern, production config
-- [Migration](docs/MIGRATION.md) - Upgrade between versions
-- [Deployment](docs/DEPLOY.md) - Vercel, Render, Netlify, Docker
-- [API Reference](docs/API.md) - REST endpoint documentation
-- [Schema](docs/SCHEMA.md) - Database schema reference
+- [Architecture](docs/ARCHITECTURE.md)
+- [API](docs/API.md)
+- [Schema](docs/SCHEMA.md)
+- [Deployment](docs/DEPLOY.md)
+- [Migration](docs/MIGRATION.md)
 
 **Version:**
-- skateboard@4.11.0
-- skateboard-ui@4.14.0
+- skateboard@5.6.0
+- skateboard-ui@5.1.0
+
+## Migrating 4.x → 5.0 (exact checklist)
+
+**5.0 is a breaking major** for both the boilerplate (`skateboard`) and the shell (`@stevederico/skateboard-ui`). Apps on any **4.x** pin must complete every step below. Do not stamp `skateboardVersion: "5.0.0"` until the checklist is green.
+
+### A. Preconditions
+
+1. Confirm the app is skateboard: `package.json` has `skateboardVersion`.
+2. Clean git tree (commit or stash). Branch: `chore/skateboard-5`.
+3. Note current versions: `skateboardVersion` and `@stevederico/skateboard-ui` in `package.json`.
+
+### B. Boilerplate / Rust backend (if still on Node/Hono or behind on Rust)
+
+4. Refresh the updater from master:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/stevederico/skateboard/master/scripts/update-skateboard.js -o scripts/update-skateboard.js
+   ```
+5. Run: `node scripts/update-skateboard.js --yes`
+   - If it says “Already on latest” but `backend/server.ts` or `backend/package.json` still exists, re-run with `--baseline <real-prior-version>` from git history.
+6. Resolve every `<<<<<<<` conflict. Port custom Hono routes into `backend/src/routes.rs`. Schema lives in `backend/src/db.rs`.
+7. Confirm zero-crate Rust: `backend/Cargo.toml` has empty `[dependencies]`. Backend commands are `cargo run` / `cargo test --locked` — not `npm run server`.
+
+### C. Install skateboard-ui 5.0.0
+
+8. Install exact pin (must match this template):
+   ```bash
+   npm install @stevederico/skateboard-ui@5.0.0 --save-exact
+   ```
+9. `npm run verify:ui` (or compare `package.json` vs `node_modules/@stevederico/skateboard-ui/package.json`). Declared must equal installed. Commit `package.json` **and** `package-lock.json` together.
+
+### D. Breaking frontend API changes (ui 5.0)
+
+10. **Icons — rewrite all imports**
+    ```bash
+    # Find call sites
+    rg -n "skateboard-ui/icons|DynamicIcon" src
+    ```
+    - Replace `import { X } from '@stevederico/skateboard-ui/icons'` (and `/icons/X`) with `import { X } from 'lucide-react'`.
+    - Delete every `import DynamicIcon from '@stevederico/skateboard-ui/DynamicIcon'` — use a named Lucide icon in app code. Shell still resolves `constants.json` `icon` strings privately (`constantsIcon`); apps do not get a public dynamic resolver.
+    - Ensure `lucide-react` is listed in app `dependencies` (boilerplate ships it; ui 5.0 also depends on it).
+
+11. **Keep shadcn import paths**
+    - Continue using `@stevederico/skateboard-ui/shadcn/ui/<name>`.
+    - Do **not** rewrite to `…/ui/<name>` unless you want to — both work; `shadcn/ui/*` is remapped via package `exports` (linker shim files are gone).
+
+12. **Routing**
+    - Apps must **not** depend on `react-router` / `react-router-dom` directly for shell navigation. Use `useSafeNavigate()` from `@stevederico/skateboard-ui/Utilities`.
+    - ui 5.0 pins `react-router@7.18.3` (CVE-2026-55685). Do not downgrade below 7.18.0.
+
+13. **Removed Utilities (already gone in late 4.x — confirm)**
+    - No `useForm`, `logEvent`, or public `setSidebarVisible` / `setTabBarVisible` (use `showSidebar` / `hideSidebar` / `showTabBar` / `hideTabBar` if needed).
+
+### E. Vite / frontend toolchain (boilerplate 5.0)
+
+14. **Drop `@vitejs/plugin-react-swc`**
+    - Remove from `package.json` `devDependencies` and from `vite.config.ts` plugins.
+    - Keep Vite esbuild JSX: `esbuild: { jsx: 'automatic', jsxImportSource: 'react' }`.
+    - Expect **full page reload** on edit (no React Fast Refresh plugin).
+
+15. **Drop forced dep re-optimize**
+    - Scripts: `vite --mode development` — **not** `vite --force`.
+    - Remove `optimizeDeps.force: true` from `vite.config.ts`.
+
+16. **Drop leftover coverage scripts** if present: `test:coverage`, `test:coverage:build`.
+
+17. Align `vite.config.ts` / `vite.plugins.ts` with the template via the updater (or copy from the reference repo).
+
+### F. Verify
+
+18. `npm run typecheck`
+19. `npm run test` (frontend script tests)
+20. `cd backend && cargo test --locked`
+21. Smoke: `npm run start` + `cd backend && cargo run` — sign-in, one API round-trip, checkout/portal only if Stripe env is set.
+22. Optional live Stripe webhook: `backend/scripts/stripe-cli-replay.sh` (never CI).
+
+### G. Stamp versions
+
+23. Set `version` and `skateboardVersion` in `package.json` to **5.0.0** (must be equal).
+24. Update the app’s `CHANGELOG.md` / docs that name old versions.
+25. Commit on the branch. Do not push/merge without approval.
+
+### What 5.0 does *not* require
+
+- No rewrite of `constants.json` shape (icon **values** stay Lucide name strings).
+- No change to `@stevederico/skateboard-ui/shadcn/ui/*` import strings for apps.
+- Calendar / CommandMenu / TextView / mid-tier primitives (accordion, progress, …) remain available.
 
 ## Updating from Skateboard Boilerplate
 
@@ -673,17 +758,30 @@ This project was created from the skateboard boilerplate. The `skateboardVersion
 
 **Reference repo:** https://github.com/stevederico/skateboard
 
-### Update Workflow
+For **4.x → 5.0**, use the checklist above (not only the short workflow).
+
+### Update Workflow (general)
 
 1. Check `skateboardVersion` in package.json against latest release
-2. Review CHANGELOG.md in the reference repo for changes
-3. Update skateboard-ui: `npm install @stevederico/skateboard-ui@latest`
-4. Compare and update boilerplate files
-5. Update `skateboardVersion` field after applying changes
+2. Review `skateboard-changelog.md` in the reference repo for changes
+3. Update skateboard-ui to the pin in the reference `package.json`: `npm install @stevederico/skateboard-ui@<pin> --save-exact`
+4. Run `scripts/update-skateboard.js` for vendored boilerplate (especially `backend/`)
+5. Apply the breaking-change steps for that release (for 5.0: section **Migrating 4.x → 5.0**)
+6. Update `skateboardVersion` only after verify is green
+
+**CRITICAL — never bump a version in `package.json` without installing it.** Editing the
+dependency string (or running `npm install <pkg>@x` then reverting node_modules) leaves the
+*declared* version ahead of the *installed* one — the lockfile and `node_modules` still hold
+the old code, so builds/tests pass against stale deps and the bump is a lie. After ANY change to
+a version in `package.json`:
+1. Run `npm install` so the lockfile + `node_modules` actually match.
+2. Verify declared == installed before committing:
+   `npm run verify:ui` (for skateboard-ui), or
+   `npm ls <pkg>` / compare `package.json` vs `node_modules/<pkg>/package.json`.
+3. Commit `package.json` **and** `package-lock.json` together — never one without the other.
 
 ### Safe to Update (review and apply)
-- `backend/server.ts` - Server logic, security updates
-- `backend/adapters/*` - Database adapters
+- `backend/src/*` - Rust server
 - `vite.config.ts` - Build configuration
 - `src/assets/styles.css` - Theme variables (merge carefully)
 
