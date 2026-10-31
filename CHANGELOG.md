@@ -5,6 +5,11 @@
   New versions go at the top. Present tense, 3 words or less per item.
   Dash-prefixed items = still open (todo list).
 -->
+0.109.1
+
+  Remove isSubscriber route doc
+  Point to usage check
+
 0.109.0
 
   Port skateboard 5.6
