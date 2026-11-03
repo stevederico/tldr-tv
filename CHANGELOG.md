@@ -5,6 +5,10 @@
   New versions go at the top. Present tense, 3 words or less per item.
   Dash-prefixed items = still open (todo list).
 -->
+0.109.2
+
+  Bump skateboard-ui 5.11.4
+
 0.109.1
 
   Remove isSubscriber route doc

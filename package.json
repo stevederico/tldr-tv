@@ -1,7 +1,7 @@
 {
   "name": "tldr-tv",
   "private": false,
-  "version": "0.109.1",
+  "version": "0.109.2",
   "skateboardVersion": "5.6.0",
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "test:docs": "node scripts/test-docs.mjs"
   },
   "dependencies": {
-    "@stevederico/skateboard-ui": "5.1.0",
+    "@stevederico/skateboard-ui": "5.11.4",
     "lucide-react": "0.546.0",
     "onnxruntime-node": "1.21.0",
     "phonemizer": "1.2.1",
